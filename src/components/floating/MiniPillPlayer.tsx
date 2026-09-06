@@ -142,8 +142,8 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
               : phase === 'expanding' && !isSpeaking
               ? 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[178px] h-[38px] px-3 border border-indigo-500/40 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_16px_rgba(99,102,241,0.22)]'
               : isSpeaking
-              ? 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[158px] h-[38px] px-2.5 border border-indigo-400/50 shadow-[0_8px_30px_rgba(99,102,241,0.3)]'
-              : 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[158px] h-[38px] px-2.5 border border-white/25 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_14px_rgba(99,102,241,0.18)]'
+              ? 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[152px] h-[38px] pl-[5px] pr-[7px] border border-indigo-400/50 shadow-[0_8px_30px_rgba(99,102,241,0.3)]'
+              : 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[152px] h-[38px] pl-[5px] pr-[7px] border border-white/25 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_14px_rgba(99,102,241,0.18)]'
           }`}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={onMouseLeave}

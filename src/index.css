@@ -113,40 +113,61 @@
 }
 
 /* =========================================================================
-   Hardware-Accelerated Water Droplet Physics & 60fps Viscous Expansion
-   1. Descent: Droplet drips from above laptop monitor bezel (-75px) via translate3d (0.0s – 0.8s)
-   2. Impact: Soft landing with surface tension squish & 3D water ripple ring (0.8s – 0.9s)
-   3. Slow Continuous Expansion: Viscous liquid spreads outward 36px -> 156px with single smooth spline (0.9s – 1.7s)
-   4. Content Materialization: Pure GPU opacity + translate3d dissolve (1.6s – 2.0s)
+   Ultra-Smooth 120fps Pure GPU-Composited Water Droplet Engine
+   1. Descent: Droplet plunges from above laptop monitor bezel (-78px)
+      with multi-stage hydrodynamic stretch on dedicated DirectComposition layers.
+   2. Touchdown: High-density impact compression & lateral splash squish.
+   3. Fluid Breakout: Semicircles glide outward seamlessly via translate3d.
+   4. Continuous 120Hz Spline: 100% GPU transform execution (0 layout reflows).
    ========================================================================= */
 
 @keyframes waterDropFall {
   0% {
-    transform: translate3d(0, -75px, 0) scale3d(0.9, 1.15, 1);
+    transform: translate3d(0, -78px, 0) scale3d(0.88, 1.18, 1);
     opacity: 0;
   }
-  12% {
-    opacity: 1;
-    transform: translate3d(0, -52px, 0) scale3d(0.92, 1.12, 1);
+  6% {
+    transform: translate3d(0, -68px, 0) scale3d(0.89, 1.16, 1);
+    opacity: 0.6;
   }
-  32% {
-    transform: translate3d(0, -12px, 0) scale3d(0.95, 1.08, 1);
+  12% {
+    transform: translate3d(0, -56px, 0) scale3d(0.90, 1.15, 1);
+    opacity: 1;
+  }
+  18% {
+    transform: translate3d(0, -42px, 0) scale3d(0.92, 1.13, 1);
+  }
+  24% {
+    transform: translate3d(0, -27px, 0) scale3d(0.94, 1.10, 1);
+  }
+  30% {
+    transform: translate3d(0, -13px, 0) scale3d(0.96, 1.07, 1);
+  }
+  36% {
+    transform: translate3d(0, 0px, 0) scale3d(1.00, 1.00, 1);
+  }
+  /* Impact Touchdown & Hydrodynamic Compression */
+  39% {
+    transform: translate3d(0, 2px, 0) scale3d(1.16, 0.86, 1);
   }
   42% {
-    /* Touchdown: impact cushion into surface with GPU liquid squash */
-    transform: translate3d(0, 3px, 0) scale3d(1.25, 0.78, 1);
+    transform: translate3d(0, 3.5px, 0) scale3d(1.28, 0.75, 1);
   }
-  54% {
-    /* Soft surface tension rebound */
-    transform: translate3d(0, -1.5px, 0) scale3d(0.98, 1.02, 1);
+  45% {
+    transform: translate3d(0, 2px, 0) scale3d(1.18, 0.85, 1);
   }
-  68% {
-    /* Gentle micro-settle */
-    transform: translate3d(0, 0.5px, 0) scale3d(1.01, 0.99, 1);
+  /* Viscous Rebound */
+  49% {
+    transform: translate3d(0, -1.2px, 0) scale3d(0.97, 1.03, 1);
   }
-  84%, 100% {
-    /* Full resting equilibrium */
-    transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
+  53% {
+    transform: translate3d(0, -0.4px, 0) scale3d(0.99, 1.01, 1);
+  }
+  58% {
+    transform: translate3d(0, 0.3px, 0) scale3d(1.005, 0.995, 1);
+  }
+  65%, 100% {
+    transform: translate3d(0, 0px, 0) scale3d(1, 1, 1);
     opacity: 1;
   }
 }
@@ -159,41 +180,163 @@
   transform-origin: top center;
 }
 
-@keyframes waterDropMorph {
-  0%, 48% {
-    /* Pure 38px circular bead through descent and impact - ZERO layout reflow! */
-    width: 38px;
+/* Left Semicircle Outward Glide: starts at +59px (center), glides to 0px across 10 high-density frames */
+@keyframes waterCapLeftSlide {
+  0%, 42% {
+    transform: translate3d(59px, 0, 0);
+  }
+  46% {
+    transform: translate3d(54px, 0, 0);
+  }
+  51% {
+    transform: translate3d(45px, 0, 0);
+  }
+  57% {
+    transform: translate3d(33px, 0, 0);
+  }
+  64% {
+    transform: translate3d(21px, 0, 0);
+  }
+  72% {
+    transform: translate3d(11px, 0, 0);
+  }
+  80% {
+    transform: translate3d(4.5px, 0, 0);
+  }
+  88% {
+    transform: translate3d(1.2px, 0, 0);
+  }
+  95% {
+    transform: translate3d(0.2px, 0, 0);
   }
   100% {
-    /* Continuous, silky-smooth spline expansion to full capsule */
-    width: 156px;
+    transform: translate3d(0px, 0, 0);
   }
 }
 
+.animate-water-cap-left {
+  animation: waterCapLeftSlide 2.0s cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Right Semicircle Outward Glide: starts at -59px (center), glides to 0px across 10 high-density frames */
+@keyframes waterCapRightSlide {
+  0%, 42% {
+    transform: translate3d(-59px, 0, 0);
+  }
+  46% {
+    transform: translate3d(-54px, 0, 0);
+  }
+  51% {
+    transform: translate3d(-45px, 0, 0);
+  }
+  57% {
+    transform: translate3d(-33px, 0, 0);
+  }
+  64% {
+    transform: translate3d(-21px, 0, 0);
+  }
+  72% {
+    transform: translate3d(-11px, 0, 0);
+  }
+  80% {
+    transform: translate3d(-4.5px, 0, 0);
+  }
+  88% {
+    transform: translate3d(-1.2px, 0, 0);
+  }
+  95% {
+    transform: translate3d(-0.2px, 0, 0);
+  }
+  100% {
+    transform: translate3d(0px, 0, 0);
+  }
+}
+
+.animate-water-cap-right {
+  animation: waterCapRightSlide 2.0s cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Center Body Expansion: scales from 0 to 1 at the exact center across 10 high-density frames */
+@keyframes waterCenterScale {
+  0%, 42% {
+    transform: scale3d(0, 1, 1);
+  }
+  46% {
+    transform: scale3d(0.08, 1, 1);
+  }
+  51% {
+    transform: scale3d(0.24, 1, 1);
+  }
+  57% {
+    transform: scale3d(0.44, 1, 1);
+  }
+  64% {
+    transform: scale3d(0.64, 1, 1);
+  }
+  72% {
+    transform: scale3d(0.81, 1, 1);
+  }
+  80% {
+    transform: scale3d(0.92, 1, 1);
+  }
+  88% {
+    transform: scale3d(0.98, 1, 1);
+  }
+  95% {
+    transform: scale3d(0.997, 1, 1);
+  }
+  100% {
+    transform: scale3d(1, 1, 1);
+  }
+}
+
+.animate-water-center {
+  animation: waterCenterScale 2.0s cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
+  will-change: transform;
+  transform-origin: center center;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Legacy fallback class */
 .animate-water-morph {
-  animation: waterDropMorph 2.0s cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
+  animation: waterCenterScale 2.0s cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
   transform: translateZ(0);
   backface-visibility: hidden;
   transform-origin: center center;
 }
 
-/* Water Impact Circular Ripple Wave - 100% GPU Composited 3D */
+/* Water Impact Circular Ripple Wave - High-Density 120fps 3D */
 @keyframes waterDropRipple {
-  0%, 39% {
+  0%, 37% {
     opacity: 0;
-    transform: translate3d(-50%, -50%, 0) scale3d(0.2, 0.2, 1);
+    transform: translate3d(-50%, -50%, 0) scale3d(0.1, 0.1, 1);
   }
-  43% {
-    opacity: 0.85;
-    transform: translate3d(-50%, -50%, 0) scale3d(0.45, 0.45, 1);
+  40% {
+    opacity: 0.9;
+    transform: translate3d(-50%, -50%, 0) scale3d(0.35, 0.35, 1);
   }
-  68% {
-    opacity: 0.2;
-    transform: translate3d(-50%, -50%, 0) scale3d(1.4, 1.4, 1);
+  48% {
+    opacity: 0.7;
+    transform: translate3d(-50%, -50%, 0) scale3d(0.75, 0.75, 1);
   }
-  88%, 100% {
+  58% {
+    opacity: 0.4;
+    transform: translate3d(-50%, -50%, 0) scale3d(1.15, 1.15, 1);
+  }
+  70% {
+    opacity: 0.15;
+    transform: translate3d(-50%, -50%, 0) scale3d(1.55, 1.55, 1);
+  }
+  84%, 100% {
     opacity: 0;
-    transform: translate3d(-50%, -50%, 0) scale3d(1.85, 1.85, 1);
+    transform: translate3d(-50%, -50%, 0) scale3d(1.95, 1.95, 1);
   }
 }
 
@@ -215,11 +358,19 @@
 /* Sequential Content Materialization:
    Content stays invisible while the droplet falls, hits, and expands into
    the pill capsule (first 1.5s), then smoothly reveals once the glass settles.
-   Uses GPU opacity + translate3d (ZERO expensive blur filter CPU passes). */
+   Uses GPU opacity + translate3d across high-density frames. */
 @keyframes waterContentReveal {
-  0%, 76% {
+  0%, 74% {
     opacity: 0;
-    transform: translate3d(0, 3px, 0);
+    transform: translate3d(0, 4px, 0);
+  }
+  84% {
+    opacity: 0.4;
+    transform: translate3d(0, 2px, 0);
+  }
+  92% {
+    opacity: 0.8;
+    transform: translate3d(0, 0.5px, 0);
   }
   100% {
     opacity: 1;

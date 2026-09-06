@@ -134,23 +134,40 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
           <div className="animate-water-ripple pointer-events-none" />
         )}
 
-        {/* Inner Capsule: Organic Water Droplet Shape -> Impact Squish -> Slow Expansion */}
+        {/* Inner Capsule: 100% GPU-Composited Morphing Pill (Zero Reflow, 120 FPS) */}
         <div
-          className={`relative overflow-hidden rounded-full bg-[#0b0f19] flex items-center justify-between select-none text-white cursor-default ${
+          className={`relative overflow-hidden rounded-full flex items-center justify-between select-none text-white cursor-default ${
             phase === 'compact' && !isSpeaking
-              ? 'animate-water-morph w-[156px] h-[38px] px-3.5 border border-white/20 shadow-[0_8px_24px_rgba(0,0,0,0.7),0_0_12px_rgba(99,102,241,0.15),inset_0_1px_2px_rgba(255,255,255,0.25)]'
+              ? 'w-[156px] h-[38px] px-3.5'
               : phase === 'expanding' && !isSpeaking
-              ? 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[236px] h-[38px] px-3.5 border border-indigo-500/40 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_16px_rgba(99,102,241,0.22)]'
+              ? 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[236px] h-[38px] px-3.5 bg-[#0b0f19] border border-indigo-500/40 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_16px_rgba(99,102,241,0.22)]'
               : isSpeaking
-              ? 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[212px] h-[38px] px-3 border border-indigo-400/50 shadow-[0_8px_30px_rgba(99,102,241,0.3)]'
-              : 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[212px] h-[38px] px-3 border border-white/25 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_14px_rgba(99,102,241,0.18)]'
+              ? 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[212px] h-[38px] px-3 bg-[#0b0f19] border border-indigo-400/50 shadow-[0_8px_30px_rgba(99,102,241,0.3)]'
+              : 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[212px] h-[38px] px-3 bg-[#0b0f19] border border-white/25 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_14px_rgba(99,102,241,0.18)]'
           }`}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={onMouseLeave}
           data-tauri-drag-region
         >
-          {/* Top Specular Water Highlight Crescent (light reflecting on curved water surface) */}
-          <div className="absolute top-0 inset-x-0 h-[40%] pointer-events-none rounded-t-full bg-gradient-to-b from-white/30 via-white/5 to-transparent z-0" />
+          {/* 100% GPU Dual-Cap Fluid Shell (Zero Layout Reflows, Pure DirectComposition 120 FPS) */}
+          {phase === 'compact' && !isSpeaking ? (
+            <div className="absolute inset-0 pointer-events-none rounded-full overflow-hidden z-0">
+              {/* Center Expanding Body */}
+              <div className="animate-water-center absolute left-[18px] right-[18px] top-0 bottom-0 bg-[#0b0f19] border-t border-b border-white/20 shadow-[0_8px_24px_rgba(0,0,0,0.7),0_0_12px_rgba(99,102,241,0.15)] z-10" />
+
+              {/* Left Translating Semicircle */}
+              <div className="animate-water-cap-left absolute left-0 top-0 w-[19px] h-[38px] bg-[#0b0f19] border-l border-t border-b border-white/20 rounded-l-full shadow-[0_8px_24px_rgba(0,0,0,0.7),0_0_12px_rgba(99,102,241,0.15)] z-20" />
+
+              {/* Right Translating Semicircle */}
+              <div className="animate-water-cap-right absolute right-0 top-0 w-[19px] h-[38px] bg-[#0b0f19] border-r border-t border-b border-white/20 rounded-r-full shadow-[0_8px_24px_rgba(0,0,0,0.7),0_0_12px_rgba(99,102,241,0.15)] z-20" />
+
+              {/* Top Specular Water Highlight Crescent across whole shell */}
+              <div className="absolute top-0 inset-x-0 h-[40%] pointer-events-none rounded-t-full bg-gradient-to-b from-white/30 via-white/5 to-transparent z-30" />
+            </div>
+          ) : (
+            /* Top Specular Water Highlight Crescent for later phases */
+            <div className="absolute top-0 inset-x-0 h-[40%] pointer-events-none rounded-t-full bg-gradient-to-b from-white/30 via-white/5 to-transparent z-0" />
+          )}
 
           {/* Specular Light Catch upon landing (z-0 background layer) */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-full z-0">

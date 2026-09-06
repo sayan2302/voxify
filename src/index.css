@@ -113,50 +113,40 @@
 }
 
 /* =========================================================================
-   Liquid Mercury / Water Droplet Physics Animation
-   Drips from outside the laptop bezel (-56px), plunges into view, impacts
-   with vertical compression & surface-tension horizontal squish, then
-   elastically expands into the full pill capsule before settling.
-   ========================================================================= */
-
-/* =========================================================================
-   Natural Organic Water Droplet Physics & Slow Viscous Expansion
-   1. Descent: Droplet drips from above laptop monitor bezel (-75px) into view (0.0s – 0.8s)
-   2. Impact: Soft landing with surface tension squish & water ripple ring (0.8s – 0.9s)
-   3. Slow Organic Expansion: Viscous liquid spreads outward 36px -> 156px (0.9s – 1.7s)
-   4. Content Materialization: Dot & word count smoothly dissolve into view (1.6s – 2.0s)
+   Hardware-Accelerated Water Droplet Physics & 60fps Viscous Expansion
+   1. Descent: Droplet drips from above laptop monitor bezel (-75px) via translate3d (0.0s – 0.8s)
+   2. Impact: Soft landing with surface tension squish & 3D water ripple ring (0.8s – 0.9s)
+   3. Slow Continuous Expansion: Viscous liquid spreads outward 36px -> 156px with single smooth spline (0.9s – 1.7s)
+   4. Content Materialization: Pure GPU opacity + translate3d dissolve (1.6s – 2.0s)
    ========================================================================= */
 
 @keyframes waterDropFall {
   0% {
-    /* Outside laptop screen bezel */
-    transform: translateY(-75px);
+    transform: translate3d(0, -75px, 0);
     opacity: 0;
   }
   12% {
-    /* Droplet emerges smoothly past top bezel into view */
     opacity: 1;
-    transform: translateY(-52px);
+    transform: translate3d(0, -52px, 0);
   }
   32% {
-    /* Gravity acceleration downwards */
-    transform: translateY(-12px);
+    transform: translate3d(0, -12px, 0);
   }
   42% {
     /* Touchdown: impact cushion into surface */
-    transform: translateY(3px);
+    transform: translate3d(0, 3px, 0);
   }
   54% {
     /* Soft surface tension rebound */
-    transform: translateY(-1.5px);
+    transform: translate3d(0, -1.5px, 0);
   }
   68% {
     /* Gentle micro-settle */
-    transform: translateY(0.5px);
+    transform: translate3d(0, 0.5px, 0);
   }
   84%, 100% {
     /* Full resting equilibrium */
-    transform: translateY(0px);
+    transform: translate3d(0, 0, 0);
     opacity: 1;
   }
 }
@@ -164,29 +154,22 @@
 .animate-water-fall {
   animation: waterDropFall 2.0s cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
   will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
   transform-origin: top center;
 }
 
 @keyframes waterDropMorph {
   0% {
     /* Initial physical shape: true spherical water droplet bead */
-    width: 34px;
-    height: 36px;
-    padding-left: 0px;
-    padding-right: 0px;
-    border-radius: 9999px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), inset 0 1.5px 2px rgba(255, 255, 255, 0.45);
-  }
-  18% {
-    /* Falling teardrop stretch under gravity */
-    width: 32px;
-    height: 40px;
+    width: 36px;
+    height: 38px;
     padding-left: 0px;
     padding-right: 0px;
   }
   38% {
-    /* Max vertical elongation just before touchdown */
-    width: 32px;
+    /* Falling teardrop stretch under gravity */
+    width: 34px;
     height: 42px;
     padding-left: 0px;
     padding-right: 0px;
@@ -194,83 +177,50 @@
   44% {
     /* Impact squish: liquid flattens horizontally upon hitting surface */
     width: 52px;
-    height: 28px;
+    height: 30px;
     padding-left: 0px;
     padding-right: 0px;
-    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.35), inset 0 1px 2px rgba(255, 255, 255, 0.4);
   }
   52% {
     /* Fluid rebound from squish */
     width: 44px;
-    height: 35px;
+    height: 38px;
     padding-left: 2px;
     padding-right: 2px;
   }
-  60% {
-    /* SLOW ORGANIC HORIZONTAL EXPANSION IN FULL MOTION */
-    width: 68px;
-    height: 38px;
-    padding-left: 5px;
-    padding-right: 5px;
-  }
-  70% {
-    width: 98px;
-    height: 38px;
-    padding-left: 8px;
-    padding-right: 8px;
-  }
-  80% {
-    width: 126px;
-    height: 38px;
-    padding-left: 11px;
-    padding-right: 11px;
-  }
-  90% {
-    width: 148px;
-    height: 38px;
-    padding-left: 13px;
-    padding-right: 13px;
-  }
-  96% {
-    /* Subtle 1px organic fluid relaxation */
-    width: 157px;
-    height: 38px;
-    padding-left: 14px;
-    padding-right: 14px;
-  }
   100% {
-    /* Full resting pill capsule proportions */
+    /* Single continuous, mathematically smooth spline expansion to full capsule (no jagged intermediate stops) */
     width: 156px;
     height: 38px;
     padding-left: 14px;
     padding-right: 14px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7), 0 0 12px rgba(99, 102, 241, 0.15), inset 0 1px 2px rgba(255, 255, 255, 0.25);
   }
 }
 
 .animate-water-morph {
   animation: waterDropMorph 2.0s cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
-  will-change: width, height, padding, box-shadow;
+  transform: translateZ(0);
+  backface-visibility: hidden;
   transform-origin: center center;
 }
 
-/* Water Impact Circular Ripple Wave */
+/* Water Impact Circular Ripple Wave - 100% GPU Composited 3D */
 @keyframes waterDropRipple {
   0%, 39% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(0.2);
+    transform: translate3d(-50%, -50%, 0) scale3d(0.2, 0.2, 1);
   }
   43% {
     opacity: 0.85;
-    transform: translate(-50%, -50%) scale(0.45);
+    transform: translate3d(-50%, -50%, 0) scale3d(0.45, 0.45, 1);
   }
   68% {
     opacity: 0.2;
-    transform: translate(-50%, -50%) scale(1.4);
+    transform: translate3d(-50%, -50%, 0) scale3d(1.4, 1.4, 1);
   }
   88%, 100% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(1.85);
+    transform: translate3d(-50%, -50%, 0) scale3d(1.85, 1.85, 1);
   }
 }
 
@@ -285,33 +235,30 @@
   box-shadow: 0 0 14px rgba(99, 102, 241, 0.4);
   animation: waterDropRipple 2.0s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
   will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 /* Sequential Content Materialization:
    Content stays invisible while the droplet falls, hits, and expands into
-   the pill capsule (first 1.5s), then smoothly reveals once the glass settles. */
+   the pill capsule (first 1.5s), then smoothly reveals once the glass settles.
+   Uses GPU opacity + translate3d (ZERO expensive blur filter CPU passes). */
 @keyframes waterContentReveal {
   0%, 76% {
     opacity: 0;
-    transform: scale(0.92);
-    filter: blur(2px);
-  }
-  90% {
-    opacity: 0.7;
-    transform: scale(0.98);
-    filter: blur(0.5px);
+    transform: translate3d(0, 3px, 0);
   }
   100% {
     opacity: 1;
-    transform: scale(1);
-    filter: blur(0px);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 .animate-water-content,
 .animate-droplet-content {
   animation: waterContentReveal 2.0s cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
-  will-change: transform, opacity, filter;
+  will-change: transform, opacity;
+  transform: translateZ(0);
 }
 
 /* Smooth content crossfade for stage transitions */
@@ -349,32 +296,36 @@
 @keyframes glassLightCatch {
   0% {
     opacity: 0;
-    transform: translateX(-100%) skewX(-15deg);
+    transform: translate3d(-100%, 0, 0) skewX(-15deg);
   }
   25% {
     opacity: 0.25;
   }
   100% {
     opacity: 0;
-    transform: translateX(180%) skewX(-15deg);
+    transform: translate3d(180%, 0, 0) skewX(-15deg);
   }
 }
 
 .animate-glass-catch {
   animation: glassLightCatch 0.85s cubic-bezier(0.16, 1, 0.3, 1) 1.65s forwards;
+  will-change: transform, opacity;
+  transform: translateZ(0);
 }
 
 /* Subtle, breathing ambient sheen across glass capsule background */
 @keyframes shimmerSheen {
   0% {
-    transform: translateX(-150%);
+    transform: translate3d(-150%, 0, 0);
   }
   100% {
-    transform: translateX(150%);
+    transform: translate3d(150%, 0, 0);
   }
 }
 
 .animate-shimmer-sheen {
   animation: shimmerSheen 4.2s cubic-bezier(0.4, 0, 0.2, 1) 2.4s infinite;
+  will-change: transform;
+  transform: translateZ(0);
 }
 

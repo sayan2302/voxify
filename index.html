@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voxify - Local Audiobook & Document Reader</title>
+    <script>
+      if (window.location.search.includes('mode=mini-pill') || window.location.hash.includes('mini-pill')) {
+        document.documentElement.classList.add('mini-pill-mode');
+      }
+    </script>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

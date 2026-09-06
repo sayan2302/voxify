@@ -1,0 +1,213 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-primary: #0b0f19;
+    --bg-secondary: #121829;
+    --bg-card: #182036;
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-accent: rgba(99, 102, 241, 0.3);
+  }
+
+  body {
+    background-color: var(--bg-primary);
+    color: #f1f5f9;
+    font-family: 'Inter', sans-serif;
+    overflow-x: hidden;
+    user-select: none;
+  }
+
+  html.mini-pill-mode,
+  body.mini-pill-mode,
+  html.mini-pill-mode #root,
+  body.mini-pill-mode #root {
+    width: 100% !important;
+    height: 100% !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+}
+
+/* Custom modern scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.3);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.6);
+}
+
+/* High-performance solid dark theme panels (Zero GPU compositor blur overhead) */
+.glass-panel {
+  background: #121829;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-panel-interactive {
+  background: #151d33;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.15s ease;
+}
+
+.glass-panel-interactive:hover {
+  background: #1c2642;
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+/* Karaoke Read-Along active highlighting */
+.karaoke-active {
+  background: linear-gradient(120deg, rgba(99, 102, 241, 0.35) 0%, rgba(168, 85, 247, 0.35) 100%);
+  border-bottom: 2px solid #818cf8;
+  border-radius: 4px;
+  padding: 2px 4px;
+  transition: all 0.15s ease-out;
+}
+
+/* Dialogue quote distinctive styling */
+.dialogue-quote {
+  color: #38bdf8;
+  font-style: italic;
+}
+
+/* Glow effects */
+.glow-primary {
+  box-shadow: 0 0 20px -2px rgba(99, 102, 241, 0.35);
+}
+
+.glow-teal {
+  box-shadow: 0 0 20px -2px rgba(20, 184, 166, 0.35);
+}
+
+/* Sound wave animations for Dynamic Island Mini-Pill */
+@keyframes soundwave {
+  0%, 100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.animate-soundwave {
+  animation: soundwave 0.8s ease-in-out infinite;
+  transform-origin: center;
+}
+
+/* =========================================================================
+   Ultra-Realistic Physics-Based Top-Bezel Drop ("Mercury Glass Droplet")
+   Smooth 120fps hardware-accelerated transform curve with organic kinetic
+   deceleration, soft-touch cushion, and gentle equilibrium damping.
+   ========================================================================= */
+
+@keyframes mercuryDrop {
+  0% {
+    transform: translateY(-36px) scale(0.96, 1.04);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  60% {
+    /* Soft touchdown cushion */
+    transform: translateY(3px) scale(1.02, 0.98);
+  }
+  80% {
+    /* Gentle elastic micro-rebound */
+    transform: translateY(-1px) scale(0.995, 1.005);
+  }
+  100% {
+    /* Natural resting equilibrium */
+    transform: translateY(0px) scale(1, 1);
+    opacity: 1;
+  }
+}
+
+.animate-mercury-drop {
+  animation: mercuryDrop 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+  transform-origin: top center;
+}
+
+/* Smooth content crossfade for stage transitions */
+@keyframes pillContentFadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-pill-content {
+  animation: pillContentFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Rhythmic studio equalizer vertical bar scaling */
+@keyframes eqBarPulse {
+  0%, 100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.animate-eq-bar {
+  animation: eqBarPulse 0.75s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+
+/* Specular Light Catch on Settle - Glides softly once across the glass edge */
+@keyframes glassLightCatch {
+  0% {
+    opacity: 0;
+    transform: translateX(-100%) skewX(-15deg);
+  }
+  25% {
+    opacity: 0.25;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(180%) skewX(-15deg);
+  }
+}
+
+.animate-glass-catch {
+  animation: glassLightCatch 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+}
+
+/* Subtle, breathing ambient sheen across glass capsule background */
+@keyframes shimmerSheen {
+  0% {
+    transform: translateX(-150%);
+  }
+  100% {
+    transform: translateX(150%);
+  }
+}
+
+.animate-shimmer-sheen {
+  animation: shimmerSheen 4.2s cubic-bezier(0.4, 0, 0.2, 1) 1.0s infinite;
+}
+

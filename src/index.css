@@ -113,38 +113,72 @@
 }
 
 /* =========================================================================
-   Ultra-Realistic Physics-Based Top-Bezel Drop ("Mercury Glass Droplet")
-   Smooth 120fps hardware-accelerated transform curve with organic kinetic
-   deceleration, soft-touch cushion, and gentle equilibrium damping.
+   Liquid Mercury / Water Droplet Physics Animation
+   Drips from outside the laptop bezel (-56px), plunges into view, impacts
+   with vertical compression & surface-tension horizontal squish, then
+   elastically expands into the full pill capsule before settling.
    ========================================================================= */
 
-@keyframes mercuryDrop {
+@keyframes dropletImpactAndExpand {
   0% {
-    transform: translateY(-36px) scale(0.96, 1.04);
+    /* Outside laptop screen bezel: tiny condensed droplet bead */
+    transform: translateY(-56px) scale(0.14, 0.28);
     opacity: 0;
+    filter: blur(1.5px);
   }
-  30% {
+  15% {
+    /* Falling through top bezel: stretching into falling teardrop */
     opacity: 1;
+    transform: translateY(-16px) scale(0.22, 0.42);
+    filter: blur(0px);
   }
-  60% {
-    /* Soft touchdown cushion */
-    transform: translateY(3px) scale(1.02, 0.98);
+  38% {
+    /* Impact on screen surface: vertical compression & horizontal splash squish */
+    transform: translateY(7px) scale(1.35, 0.58);
   }
-  80% {
-    /* Gentle elastic micro-rebound */
-    transform: translateY(-1px) scale(0.995, 1.005);
+  56% {
+    /* Surface tension rebound & rapid horizontal liquid stretch */
+    transform: translateY(-3px) scale(0.96, 1.06);
+  }
+  74% {
+    /* Second soft cushion settling into pill proportions */
+    transform: translateY(1.5px) scale(1.02, 0.98);
+  }
+  88% {
+    /* Subtle elastic micro-damping */
+    transform: translateY(-0.5px) scale(0.995, 1.005);
   }
   100% {
-    /* Natural resting equilibrium */
+    /* Full resting equilibrium at snug bezel position */
     transform: translateY(0px) scale(1, 1);
     opacity: 1;
   }
 }
 
+.animate-droplet-impact,
 .animate-mercury-drop {
-  animation: mercuryDrop 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  will-change: transform, opacity;
+  animation: dropletImpactAndExpand 0.68s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity, filter;
   transform-origin: top center;
+}
+
+/* Sequential Content Materialization:
+   Content stays invisible while the droplet falls, hits, and expands into
+   the pill capsule (first 420ms), then smoothly reveals once the glass settles. */
+@keyframes dropletContentReveal {
+  0%, 60% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-droplet-content {
+  animation: dropletContentReveal 0.68s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
 }
 
 /* Smooth content crossfade for stage transitions */
@@ -194,7 +228,7 @@
 }
 
 .animate-glass-catch {
-  animation: glassLightCatch 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+  animation: glassLightCatch 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.38s forwards;
 }
 
 /* Subtle, breathing ambient sheen across glass capsule background */

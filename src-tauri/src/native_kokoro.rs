@@ -251,6 +251,24 @@ pub fn voice_name_to_sid(voice_name: &str) -> i32 {
 }
 
 pub fn get_default_model_dir() -> PathBuf {
+    // 1. Check relative to running executable (Installed App or Portable zip)
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let exe_candidates = [
+                exe_dir.join("models").join("kokoro-en-v0_19"),
+                exe_dir.join("resources").join("models").join("kokoro-en-v0_19"),
+                exe_dir.join("resources").join("kokoro-en-v0_19"),
+                exe_dir.join("kokoro-en-v0_19"),
+            ];
+            for c in &exe_candidates {
+                if c.exists() && c.join("model.onnx").exists() {
+                    return c.clone();
+                }
+            }
+        }
+    }
+
+    // 2. Check local working directory and development paths
     let candidates = [
         PathBuf::from("src-tauri/models/kokoro-en-v0_19"),
         PathBuf::from("models/kokoro-en-v0_19"),
@@ -263,6 +281,7 @@ pub fn get_default_model_dir() -> PathBuf {
         }
     }
 
+    // 3. Check AppData paths
     if let Ok(app_data) = std::env::var("LOCALAPPDATA") {
         let p_vox = PathBuf::from(&app_data).join("voxify").join("models").join("kokoro-en-v0_19");
         if p_vox.exists() && p_vox.join("model.onnx").exists() {

@@ -138,12 +138,12 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
         <div
           className={`relative overflow-hidden rounded-full bg-[#0b0f19] flex items-center justify-between select-none text-white cursor-default ${
             phase === 'compact' && !isSpeaking
-              ? 'animate-water-morph w-[156px] h-[38px] px-3.5 border border-white/20 shadow-[0_8px_24px_rgba(0,0,0,0.7),0_0_12px_rgba(99,102,241,0.15),inset_0_1px_2px_rgba(255,255,255,0.25)]'
+              ? 'animate-water-morph w-[118px] h-[38px] px-3 border border-white/20 shadow-[0_8px_24px_rgba(0,0,0,0.7),0_0_12px_rgba(99,102,241,0.15),inset_0_1px_2px_rgba(255,255,255,0.25)]'
               : phase === 'expanding' && !isSpeaking
-              ? 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[236px] h-[38px] px-3.5 border border-indigo-500/40 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_16px_rgba(99,102,241,0.22)]'
+              ? 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[178px] h-[38px] px-3 border border-indigo-500/40 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_16px_rgba(99,102,241,0.22)]'
               : isSpeaking
-              ? 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[212px] h-[38px] px-3 border border-indigo-400/50 shadow-[0_8px_30px_rgba(99,102,241,0.3)]'
-              : 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[212px] h-[38px] px-3 border border-white/25 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_14px_rgba(99,102,241,0.18)]'
+              ? 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[158px] h-[38px] px-2.5 border border-indigo-400/50 shadow-[0_8px_30px_rgba(99,102,241,0.3)]'
+              : 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[158px] h-[38px] px-2.5 border border-white/25 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_14px_rgba(99,102,241,0.18)]'
           }`}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={onMouseLeave}

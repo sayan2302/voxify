@@ -116,7 +116,7 @@
    Continuous Single-Spline Water Droplet Physics (1.05s Snappy & Seamless)
    1. Descent: Droplet dives into view past top bezel (0.0s – 0.52s) via GPU translate3d
    2. Touchdown: Soft impact squish & ripple at 0.38s
-   3. Continuous Expansion: Single unbroken cubic-bezier curve 38px -> 156px (0.38s – 1.03s)
+   3. Continuous Expansion: Single unbroken cubic-bezier curve 38px -> 118px (0.38s – 1.03s)
    4. Content Materialization: Pure GPU opacity + translate3d dissolve (0.80s – 1.12s)
    ========================================================================= */
 
@@ -156,7 +156,7 @@
     width: 38px;
   }
   100% {
-    width: 156px;
+    width: 118px;
   }
 }
 

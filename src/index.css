@@ -122,31 +122,31 @@
 
 @keyframes waterDropFall {
   0% {
-    transform: translate3d(0, -75px, 0);
+    transform: translate3d(0, -75px, 0) scale3d(0.9, 1.15, 1);
     opacity: 0;
   }
   12% {
     opacity: 1;
-    transform: translate3d(0, -52px, 0);
+    transform: translate3d(0, -52px, 0) scale3d(0.92, 1.12, 1);
   }
   32% {
-    transform: translate3d(0, -12px, 0);
+    transform: translate3d(0, -12px, 0) scale3d(0.95, 1.08, 1);
   }
   42% {
-    /* Touchdown: impact cushion into surface */
-    transform: translate3d(0, 3px, 0);
+    /* Touchdown: impact cushion into surface with GPU liquid squash */
+    transform: translate3d(0, 3px, 0) scale3d(1.25, 0.78, 1);
   }
   54% {
     /* Soft surface tension rebound */
-    transform: translate3d(0, -1.5px, 0);
+    transform: translate3d(0, -1.5px, 0) scale3d(0.98, 1.02, 1);
   }
   68% {
     /* Gentle micro-settle */
-    transform: translate3d(0, 0.5px, 0);
+    transform: translate3d(0, 0.5px, 0) scale3d(1.01, 0.99, 1);
   }
   84%, 100% {
     /* Full resting equilibrium */
-    transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
     opacity: 1;
   }
 }
@@ -160,40 +160,13 @@
 }
 
 @keyframes waterDropMorph {
-  0% {
-    /* Initial physical shape: true spherical water droplet bead */
-    width: 36px;
-    height: 38px;
-    padding-left: 0px;
-    padding-right: 0px;
-  }
-  38% {
-    /* Falling teardrop stretch under gravity */
-    width: 34px;
-    height: 42px;
-    padding-left: 0px;
-    padding-right: 0px;
-  }
-  44% {
-    /* Impact squish: liquid flattens horizontally upon hitting surface */
-    width: 52px;
-    height: 30px;
-    padding-left: 0px;
-    padding-right: 0px;
-  }
-  52% {
-    /* Fluid rebound from squish */
-    width: 44px;
-    height: 38px;
-    padding-left: 2px;
-    padding-right: 2px;
+  0%, 48% {
+    /* Pure 38px circular bead through descent and impact - ZERO layout reflow! */
+    width: 38px;
   }
   100% {
-    /* Single continuous, mathematically smooth spline expansion to full capsule (no jagged intermediate stops) */
+    /* Continuous, silky-smooth spline expansion to full capsule */
     width: 156px;
-    height: 38px;
-    padding-left: 14px;
-    padding-right: 14px;
   }
 }
 

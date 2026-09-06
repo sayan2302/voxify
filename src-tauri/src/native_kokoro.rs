@@ -1148,6 +1148,9 @@ pub fn prebuffer_first_chunk(text: &str, voice_name: &str, speed: f32) {
 
     // Spawn dedicated sequential worker on the single focused engine
     std::thread::spawn(move || {
+        // Yield 600ms of completely un-contended CPU to let the entrance droplet animation run with 120fps smoothness
+        std::thread::sleep(std::time::Duration::from_millis(600));
+
         for (idx, chunk) in chunks.into_iter().enumerate() {
             if PIPELINE_SESSION_ID.load(Ordering::Relaxed) != session_id {
                 return;

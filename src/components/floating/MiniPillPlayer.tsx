@@ -127,12 +127,18 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
 
   return (
     <div key={dropKey} className="relative flex flex-col items-center">
-      {/* Main Kinetic Liquid Droplet Impact & Expansion Capsule */}
-      <div className="animate-droplet-impact relative z-10">
+      {/* Outer Container: Gravity Descent from outside screen bezel */}
+      <div className="animate-water-fall relative z-10 flex items-center justify-center">
+        {/* Water Impact Circular Ripple Wave (radiates when droplet impacts) */}
+        {!isSpeaking && phase === 'compact' && (
+          <div className="animate-water-ripple pointer-events-none" />
+        )}
+
+        {/* Inner Capsule: Organic Water Droplet Shape -> Impact Squish -> Slow Expansion */}
         <div
           className={`relative overflow-hidden rounded-full bg-[#0b0f19] flex items-center justify-between select-none text-white cursor-default transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
             phase === 'compact' && !isSpeaking
-              ? 'w-[156px] h-[38px] px-3.5 border border-white/20 shadow-[0_8px_24px_rgba(0,0,0,0.7),0_0_12px_rgba(99,102,241,0.15)]'
+              ? 'animate-water-morph w-[156px] h-[38px] px-3.5 border border-white/20 shadow-[0_8px_24px_rgba(0,0,0,0.7),0_0_12px_rgba(99,102,241,0.15)]'
               : phase === 'expanding' && !isSpeaking
               ? 'w-[236px] h-[38px] px-3.5 border border-indigo-500/40 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_16px_rgba(99,102,241,0.22)]'
               : isSpeaking
@@ -143,6 +149,9 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
           onMouseLeave={onMouseLeave}
           data-tauri-drag-region
         >
+          {/* Top Specular Water Highlight Crescent (light reflecting on curved water surface) */}
+          <div className="absolute top-0 inset-x-0 h-[40%] pointer-events-none rounded-t-full bg-gradient-to-b from-white/30 via-white/5 to-transparent z-0" />
+
           {/* Specular Light Catch upon landing (z-0 background layer) */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-full z-0">
             <div className="w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent animate-glass-catch" />
@@ -157,7 +166,7 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
 
           {phase === 'compact' && !isSpeaking ? (
             /* Stage 1: Word Count & Duration Cognitive Anchor (4.0s) - Sequentially reveals after liquid forms */
-            <div className="w-full flex items-center justify-center gap-2 animate-droplet-content relative z-10 px-1">
+            <div className="w-full flex items-center justify-center gap-2 animate-water-content relative z-10 px-1">
               <span className="relative flex h-2 w-2 shrink-0">
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.9)]" />
               </span>

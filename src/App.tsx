@@ -1360,7 +1360,7 @@ IEEE Transactions on Audio, Speech, and Language Processing`,
 
       {/* Floating HUD Overlay (Live in-studio for immediate visual feedback) */}
       {(showFloatingPill || hudStatus.status !== 'idle' || isReadingSelection) && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4 duration-200">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50">
           <MiniPillPlayer
             currentText={hudStatus.text || readingSelectionText || currentSentenceText || 'Select any text in Windows to hear it read'}
             isPlaying={isPlaying || hudStatus.status === 'speaking'}

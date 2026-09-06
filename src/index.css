@@ -271,19 +271,33 @@
   transform: translateZ(0);
 }
 
-/* Subtle, breathing ambient sheen across glass capsule background */
-@keyframes shimmerSheen {
+/* =========================================================================
+   Luminous Optic Glass Periodic Shine
+   A crisp, angled chromatic beam (white core + subtle prismatic periwinkle glint)
+   sweeps smoothly left-to-right across the pill, then pauses in a calm cycle.
+   ========================================================================= */
+@keyframes periodicGlassShine {
   0% {
-    transform: translate3d(-150%, 0, 0);
+    transform: translate3d(-140%, 0, 0) skewX(-22deg);
+    opacity: 0;
   }
-  100% {
-    transform: translate3d(150%, 0, 0);
+  6% {
+    opacity: 1;
+  }
+  34% {
+    transform: translate3d(240%, 0, 0) skewX(-22deg);
+    opacity: 0.95;
+  }
+  42%, 100% {
+    /* Calm inter-cycle pause: remains completely offscreen */
+    transform: translate3d(260%, 0, 0) skewX(-22deg);
+    opacity: 0;
   }
 }
 
-.animate-shimmer-sheen {
-  animation: shimmerSheen 4.2s cubic-bezier(0.4, 0, 0.2, 1) 1.8s infinite;
-  will-change: transform;
+.animate-periodic-shine {
+  animation: periodicGlassShine 4.4s cubic-bezier(0.25, 1, 0.35, 1) 0.9s infinite;
+  will-change: transform, opacity;
   transform: translateZ(0);
 }
 

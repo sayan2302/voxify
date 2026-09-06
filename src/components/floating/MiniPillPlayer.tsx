@@ -152,18 +152,6 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
           {/* Top Specular Water Highlight Crescent (light reflecting on curved water surface) */}
           <div className="absolute top-0 inset-x-0 h-[40%] pointer-events-none rounded-t-full bg-gradient-to-b from-white/30 via-white/5 to-transparent z-0" />
 
-          {/* Luminous Optic Crystal Periodic Shine Sweep (z-0 background layer) */}
-          {!isSpeaking && (
-            <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-full z-0">
-              <div
-                className="absolute top-0 bottom-0 w-[45%] animate-periodic-shine pointer-events-none"
-                style={{
-                  background:
-                    'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.02) 20%, rgba(255,255,255,0.38) 50%, rgba(165,180,252,0.5) 56%, rgba(255,255,255,0.04) 80%, transparent 100%)',
-                }}
-              />
-            </div>
-          )}
 
           {phase === 'compact' && !isSpeaking ? (
             /* Stage 1: Word Count & Duration Cognitive Anchor (4.0s) - Sequentially reveals after liquid forms */

@@ -610,29 +610,6 @@ export function App() {
               </div>
             </div>
 
-            {/* Master Switch Sidebar Indicator */}
-            <div className="p-2.5 rounded-xl bg-[#18181b] border border-white/5 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full transition-all ${
-                    masterEnabled
-                      ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]'
-                      : 'bg-slate-600'
-                  }`} />
-                  <span className="text-[11px] font-semibold text-slate-200">
-                    {masterEnabled ? 'Service Active' : 'Service Paused'}
-                  </span>
-                </div>
-                <HandySwitch
-                  checked={masterEnabled}
-                  onChange={handleToggleMaster}
-                />
-              </div>
-              <p className="text-[10px] text-slate-400 leading-tight">
-                {masterEnabled ? `${activationShortcut} to summon` : 'Turned off'}
-              </p>
-            </div>
-
             {/* Navigation Tabs in Blue */}
             <nav className="space-y-1">
               {/* General Tab */}

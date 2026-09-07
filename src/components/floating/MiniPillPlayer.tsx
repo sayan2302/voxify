@@ -68,12 +68,8 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
     isSafeRef.current = isSafe;
   }, [isSafe]);
 
-  // Trigger Top-Bezel Drop CSS keyframes on every new text selection
-  useEffect(() => {
-    if (currentText) {
-      setDropKey((prev) => prev + 1);
-    }
-  }, [currentText]);
+  // Track the text that started the current animation cycle
+  const activeTextRef = React.useRef<string>('');
 
   // Notify parent of phase change
   useEffect(() => {
@@ -81,13 +77,14 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
   }, [phase, onPhaseChange]);
 
   // Dynamic Island progression lifecycle:
-  // Stage 1 (0.0s – 1.1s): Word count & duration cognitive anchor ("{N}w · ~{S}s")
+  // Stage 1 (0.0s – 2.1s): Word count & duration cognitive anchor ("{N}w · ~{S}s")
   // Transition:
-  // - If Chunk 1 / runway is ALREADY safe at 1.1s -> Blooms directly into [ ▶ Play ]!
+  // - If Chunk 1 / runway is ALREADY safe at 2.1s -> Blooms directly into [ ▶ Play ]!
   // - If still synthesizing -> Expands into Stage 2 ("Almost ready..." with animated equalizer)
   // - The moment runway becomes safe in Stage 2 -> Immediately blossoms into [ ▶ Play ]!
   useEffect(() => {
     if (!currentText || status === 'idle') {
+      activeTextRef.current = '';
       setPhase('compact');
       return;
     }
@@ -97,7 +94,15 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
       return;
     }
 
-    // Reset to compact on every new text selection
+    // If this text is already active (e.g. user paused playback or is resting in controls),
+    // NEVER revert to compact or re-drop the pill!
+    if (activeTextRef.current === currentText) {
+      return;
+    }
+
+    // Brand new text selection arrived: trigger top drop and start Stage 1
+    activeTextRef.current = currentText;
+    setDropKey((prev) => prev + 1);
     setPhase('compact');
 
     const STAGE1_DURATION = 2100; // 2.1s (+1.0s extended) comfortable glance window for droplet descent & word count

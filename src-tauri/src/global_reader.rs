@@ -960,10 +960,18 @@ pub fn play_selection(app_handle: AppHandle) {
 }
 
 #[tauri::command]
-pub fn pause_speech() {
+pub fn pause_speech(app_handle: AppHandle) {
     SELECTION_SEQUENCE.fetch_add(1, Ordering::SeqCst);
     let _ = crate::native_kokoro::stop();
     let _ = crate::native_tts::stop();
+    let cur_text = {
+        let guard = CURRENT_SELECTION_TEXT.lock().unwrap();
+        guard.clone().unwrap_or_default()
+    };
+    let _ = app_handle.emit("global-hud-status", serde_json::json!({
+        "status": "ready",
+        "text": cur_text,
+    }));
 }
 
 #[tauri::command]

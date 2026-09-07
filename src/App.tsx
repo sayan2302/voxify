@@ -322,19 +322,18 @@ export function App() {
   const [activationShortcut, setActivationShortcut] = useState<string>(() => {
     try {
       const saved = localStorage.getItem('voxify_activation_shortcut');
-      if (!saved || saved === 'Shift + Space') {
-        return 'Win + Space';
+      if (!saved || saved === 'Shift + Space' || saved === 'Win + Space') {
+        return 'Ctrl + Shift + Space';
       }
       return saved;
     } catch {
-      return 'Win + Space';
+      return 'Ctrl + Shift + Space';
     }
   });
   const [isRecordingShortcut, setIsRecordingShortcut] = useState<boolean>(false);
 
   // Preferences State
   const [autoReadSelection, setAutoReadSelection] = useState<boolean>(false);
-  const [autoReadCopy, setAutoReadCopy] = useState<boolean>(false);
   const [earconEnabled, setEarconEnabled] = useState<boolean>(true);
   const [settleDelayMs, setSettleDelayMs] = useState<number>(10);
   const [auditioningSarah, setAuditioningSarah] = useState<boolean>(false);
@@ -404,7 +403,6 @@ export function App() {
           if (config) {
             if (config.master_enabled !== undefined) setMasterEnabled(config.master_enabled);
             setAutoReadSelection(config.auto_read_selection);
-            setAutoReadCopy(config.auto_read_copy);
             if (config.activation_shortcut) setActivationShortcut(config.activation_shortcut);
             setSettleDelayMs(config.settle_delay_ms);
             setEarconEnabled(config.earcon_enabled);
@@ -453,7 +451,7 @@ export function App() {
   };
 
   const handleResetShortcut = () => {
-    const defaultShortcut = 'Win + Space';
+    const defaultShortcut = 'Ctrl + Shift + Space';
     setActivationShortcut(defaultShortcut);
     setIsRecordingShortcut(false);
     try {
@@ -468,13 +466,6 @@ export function App() {
     setAutoReadSelection(enabled);
     if (isTauri) {
       invoke('set_auto_read_enabled', { enabled }).catch(() => {});
-    }
-  };
-
-  const handleToggleAutoReadCopy = (enabled: boolean) => {
-    setAutoReadCopy(enabled);
-    if (isTauri) {
-      invoke('set_auto_read_copy_enabled', { enabled }).catch(() => {});
     }
   };
 
@@ -764,7 +755,7 @@ export function App() {
                         {isRecordingShortcut ? 'Press new keys...' : activationShortcut}
                       </button>
                       <button
-                        title="Reset hotkey to default (Win + Space)"
+                        title="Reset hotkey to default (Ctrl + Shift + Space)"
                         onClick={handleResetShortcut}
                         className="p-1 text-slate-500 hover:text-slate-300 transition-colors active:scale-95"
                       >
@@ -805,20 +796,6 @@ export function App() {
                     <HandySwitch
                       checked={autoReadSelection}
                       onChange={handleToggleAutoReadSelection}
-                    />
-                  </div>
-
-                  {/* Row: Auto-Read on Copy (Ctrl+C) */}
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-[#710030]/30 transition-colors">
-                    <div className="flex items-center">
-                      <span className="text-sm font-medium text-slate-200">
-                        Auto-Read on Copy (Ctrl+C)
-                      </span>
-                      <InfoTooltip text="Reads aloud whenever you copy text to clipboard via keyboard or right-click." />
-                    </div>
-                    <HandySwitch
-                      checked={autoReadCopy}
-                      onChange={handleToggleAutoReadCopy}
                     />
                   </div>
                 </div>

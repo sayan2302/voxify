@@ -278,21 +278,12 @@ pub fn run() {
 
             // Build Context Menu for Windows System Tray
             let is_sel = global_reader::AUTO_READ_SELECTION.load(Ordering::Relaxed);
-            let is_copy = global_reader::AUTO_READ_COPY.load(Ordering::Relaxed);
             let is_earcon = global_reader::EARCON_ENABLED.load(Ordering::Relaxed);
 
             let auto_read_item = MenuItem::with_id(
                 app,
                 "toggle_auto_read",
                 if is_sel { "🔊 Auto-Read on Selection: [ON]" } else { "🔇 Auto-Read on Selection: [OFF]" },
-                true,
-                None::<&str>
-            )?;
-
-            let auto_copy_item = MenuItem::with_id(
-                app,
-                "toggle_auto_copy",
-                if is_copy { "📋 Auto-Read on Copy: [ON]" } else { "📋 Auto-Read on Copy: [OFF]" },
                 true,
                 None::<&str>
             )?;
@@ -308,7 +299,7 @@ pub fn run() {
             let read_now_item = MenuItem::with_id(
                 app,
                 "read_selection",
-                "⚡ Read Current Selection (Win+Alt+S)",
+                "⚡ Read Current Selection (Ctrl+Shift+Space)",
                 true,
                 None::<&str>
             )?;
@@ -347,7 +338,6 @@ pub fn run() {
 
             let tray_menu = Menu::with_items(app, &[
                 &auto_read_item,
-                &auto_copy_item,
                 &earcon_item,
                 &read_now_item,
                 &stop_speech_item,
@@ -367,11 +357,6 @@ pub fn run() {
                     "toggle_auto_read" => {
                         let current = global_reader::AUTO_READ_SELECTION.load(Ordering::Relaxed);
                         global_reader::AUTO_READ_SELECTION.store(!current, Ordering::Relaxed);
-                        let _ = app.emit("auto-read-config-changed", ());
-                    }
-                    "toggle_auto_copy" => {
-                        let current = global_reader::AUTO_READ_COPY.load(Ordering::Relaxed);
-                        global_reader::AUTO_READ_COPY.store(!current, Ordering::Relaxed);
                         let _ = app.emit("auto-read-config-changed", ());
                     }
                     "toggle_earcon" => {

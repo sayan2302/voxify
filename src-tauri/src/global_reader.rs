@@ -11,7 +11,7 @@ pub static EARCON_ENABLED: AtomicBool = AtomicBool::new(true);
 static IS_SIMULATING_COPY: AtomicBool = AtomicBool::new(false);
 static WORKER_THREAD_ID: AtomicU32 = AtomicU32::new(0);
 static CURRENT_SHORTCUT: Mutex<String> = Mutex::new(String::new());
-static ACTIVE_SHORTCUT_MODS: AtomicU32 = AtomicU32::new(0x4008); // MOD_WIN (0x0008) | MOD_NOREPEAT (0x4000)
+static ACTIVE_SHORTCUT_MODS: AtomicU32 = AtomicU32::new(0x4006); // MOD_CONTROL (0x0002) | MOD_SHIFT (0x0004) | MOD_NOREPEAT (0x4000)
 static ACTIVE_SHORTCUT_VK: AtomicU32 = AtomicU32::new(0x20); // VK_SPACE
 
 // Keep track of the last read text to avoid duplicate loops
@@ -247,10 +247,11 @@ mod win32 {
         unsafe {
             IS_SIMULATING_COPY.store(true, Ordering::SeqCst);
 
-            // If Windows key, Alt, or Shift is held down by the user,
+            // If modifier keys are held down by the user,
             // release them before sending Ctrl+C so the target application receives pure Ctrl+C
             let lwin_down = (GetAsyncKeyState(VK_LWIN as i32) as u16 & 0x8000) != 0;
             let rwin_down = (GetAsyncKeyState(VK_RWIN as i32) as u16 & 0x8000) != 0;
+            let ctrl_down = (GetAsyncKeyState(VK_CONTROL as i32) as u16 & 0x8000) != 0;
             let alt_down = (GetAsyncKeyState(VK_MENU as i32) as u16 & 0x8000) != 0;
             let shift_down = (GetAsyncKeyState(VK_SHIFT as i32) as u16 & 0x8000) != 0;
 
@@ -259,6 +260,9 @@ mod win32 {
             }
             if rwin_down {
                 keybd_event(VK_RWIN, 0, KEYEVENTF_KEYUP, 0);
+            }
+            if ctrl_down {
+                keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
             }
             if alt_down {
                 keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0);
@@ -523,13 +527,13 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
             }
 
             // Register global hotkeys
-            // ID 1: Configurable Activation Shortcut (default: Win + Space)
+            // ID 1: Configurable Activation Shortcut (default: Ctrl + Shift + Space)
             let (init_mods, init_vk) = {
                 let mut current = CURRENT_SHORTCUT.lock().unwrap();
                 if current.is_empty() {
-                    *current = "Win + Space".to_string();
+                    *current = "Ctrl + Shift + Space".to_string();
                 }
-                let parsed = parse_shortcut_string(&current).unwrap_or((MOD_WIN | MOD_NOREPEAT, VK_SPACE as u32));
+                let parsed = parse_shortcut_string(&current).unwrap_or((MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, VK_SPACE as u32));
                 ACTIVE_SHORTCUT_MODS.store(parsed.0, Ordering::Relaxed);
                 ACTIVE_SHORTCUT_VK.store(parsed.1, Ordering::Relaxed);
                 parsed
@@ -674,7 +678,7 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
 #[tauri::command]
 pub fn get_auto_read_config() -> AutoReadConfig {
     let sc = CURRENT_SHORTCUT.lock().unwrap().clone();
-    let current_sc = if sc.is_empty() { "Win + Space".to_string() } else { sc };
+    let current_sc = if sc.is_empty() { "Ctrl + Shift + Space".to_string() } else { sc };
     AutoReadConfig {
         master_enabled: MASTER_SERVICE_ENABLED.load(Ordering::Relaxed),
         auto_read_selection: AUTO_READ_SELECTION.load(Ordering::Relaxed),
@@ -731,7 +735,7 @@ pub fn set_activation_shortcut(shortcut: String) {
 pub fn get_activation_shortcut() -> String {
     let sc = CURRENT_SHORTCUT.lock().unwrap().clone();
     if sc.is_empty() {
-        "Win + Space".to_string()
+        "Ctrl + Shift + Space".to_string()
     } else {
         sc
     }

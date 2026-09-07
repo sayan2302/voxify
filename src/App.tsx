@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MiniPillPlayer } from './components/floating/MiniPillPlayer';
 import {
   Sparkles,
-  Volume2,
   Sliders,
   History,
   Cpu,
@@ -26,14 +25,6 @@ export interface HudStatusPayload {
   wordCount?: number;
 }
 
-export interface KokoroVoiceInfo {
-  id: string;
-  name: string;
-  sid: number;
-  gender: string;
-  description: string;
-}
-
 export interface AutoReadConfig {
   auto_read_selection: boolean;
   auto_read_copy: boolean;
@@ -49,19 +40,8 @@ export interface HistoryItem {
   wordCount: number;
 }
 
-const FALLBACK_VOICES: KokoroVoiceInfo[] = [
-  { id: 'af_sarah', name: 'Sarah', sid: 1, gender: 'female', description: 'Youthful, bright, and natural podcast narrator' },
-  { id: 'af_bella', name: 'Bella', sid: 0, gender: 'female', description: 'Gentle, melodic, and expressive' },
-  { id: 'am_adam', name: 'Adam', sid: 2, gender: 'male', description: 'Deep, authoritative, and cinematic narrator' },
-  { id: 'af_nicole', name: 'Nicole', sid: 8, gender: 'female', description: 'Articulate, crisp, and professional' },
-  { id: 'af_sky', name: 'Sky', sid: 9, gender: 'female', description: 'Calm, airy, and soothing' },
-  { id: 'am_michael', name: 'Michael', sid: 3, gender: 'male', description: 'Conversational, natural, and friendly' },
-  { id: 'bf_emma', name: 'Emma', sid: 4, gender: 'female', description: 'British English, warm and clear' },
-  { id: 'bf_isabella', name: 'Isabella', sid: 5, gender: 'female', description: 'British English, melodic and refined' },
-  { id: 'bm_george', name: 'George', sid: 6, gender: 'male', description: 'British English, resonant and polished' },
-  { id: 'bm_lewis', name: 'Lewis', sid: 7, gender: 'male', description: 'British English, rich and engaging' },
-  { id: 'am_eric', name: 'Eric', sid: 10, gender: 'male', description: 'Clear, informative, and steady' },
-];
+const FIXED_VOICE = 'Sarah';
+const FIXED_SPEED = 1.0;
 
 /**
  * Info Tooltip Component with Handy-style (i) icon
@@ -79,7 +59,7 @@ const InfoTooltip: React.FC<{ text: string }> = ({ text }) => {
         i
       </span>
       {show && (
-        <span className="absolute left-6 top-1/2 -translate-y-1/2 z-50 w-56 p-2 rounded-lg bg-slate-900/95 border border-white/10 text-[11px] text-slate-200 shadow-xl backdrop-blur-md leading-relaxed pointer-events-none">
+        <span className="absolute left-6 top-1/2 -translate-y-1/2 z-50 w-60 p-2.5 rounded-lg bg-slate-900/95 border border-white/10 text-[11px] text-slate-200 shadow-xl backdrop-blur-md leading-relaxed pointer-events-none">
           {text}
         </span>
       )}
@@ -125,8 +105,8 @@ function MiniPillStandalone() {
   const [hudStatus, setHudStatus] = useState<HudStatusPayload>({
     status: 'idle',
     text: '',
-    voiceName: 'Sarah',
-    speed: 1.0,
+    voiceName: FIXED_VOICE,
+    speed: FIXED_SPEED,
   });
   const [isPrebufferReady, setIsPrebufferReady] = useState<boolean>(false);
   const [isRunwaySafe, setIsRunwaySafe] = useState<boolean>(false);
@@ -188,6 +168,8 @@ function MiniPillStandalone() {
             ...prev,
             status: 'staging',
             text: event.payload,
+            voiceName: FIXED_VOICE,
+            speed: FIXED_SPEED,
           }));
         }
       }).then((u) => { unlistenText = u; });
@@ -289,8 +271,8 @@ function MiniPillStandalone() {
         isPlaying={hudStatus.status === 'speaking'}
         status={hudStatus.status}
         wordCount={hudStatus.wordCount}
-        voiceName={hudStatus.voiceName}
-        speed={hudStatus.speed}
+        voiceName={FIXED_VOICE}
+        speed={FIXED_SPEED}
         isPrebufferReady={isPrebufferReady}
         isRunwaySafe={isRunwaySafe}
         bufferedChunks={bufferedChunks}
@@ -305,10 +287,11 @@ function MiniPillStandalone() {
   );
 }
 
-type TabKey = 'general' | 'voices' | 'history' | 'advanced' | 'about';
+type TabKey = 'general' | 'history' | 'advanced' | 'about';
 
 /**
  * Main Window: Handy-Style Sorted Two-Column Preferences Layout
+ * Streamlined: Locked to Sarah & 1.0x natural speed to eliminate buffer underruns and lag.
  */
 export function App() {
   const isMiniPillWindow =
@@ -322,16 +305,12 @@ export function App() {
   // Active Tab
   const [activeTab, setActiveTab] = useState<TabKey>('general');
 
-  // Preferences & Engine State
-  const [voices, setVoices] = useState<KokoroVoiceInfo[]>(FALLBACK_VOICES);
-  const [selectedVoice, setSelectedVoice] = useState<string>('Sarah');
-  const [speed, setSpeed] = useState<number>(1.0);
-  const [volume, setVolume] = useState<number>(100);
+  // Preferences State
   const [autoReadSelection, setAutoReadSelection] = useState<boolean>(true);
   const [autoReadCopy, setAutoReadCopy] = useState<boolean>(false);
   const [earconEnabled, setEarconEnabled] = useState<boolean>(true);
   const [settleDelayMs, setSettleDelayMs] = useState<number>(10);
-  const [auditioningVoice, setAuditioningVoice] = useState<string | null>(null);
+  const [auditioningSarah, setAuditioningSarah] = useState<boolean>(false);
   const [history, setHistory] = useState<HistoryItem[]>(() => {
     try {
       const saved = localStorage.getItem('voxify_history');
@@ -343,20 +322,12 @@ export function App() {
 
   const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
 
-  // Sync settings from Tauri backend
+  // Sync settings from Tauri backend & enforce Sarah + 1.0x speed
   useEffect(() => {
     if (isTauri) {
-      invoke<KokoroVoiceInfo[]>('get_kokoro_voices')
-        .then((vList) => {
-          if (vList && vList.length > 0) setVoices(vList);
-        })
-        .catch(() => {});
-
-      invoke<number>('get_kokoro_speed')
-        .then((s) => {
-          if (s && s > 0) setSpeed(s);
-        })
-        .catch(() => {});
+      // Ensure backend voice is locked to Sarah and speed is locked to 1.0
+      invoke('set_kokoro_voice', { voice: FIXED_VOICE }).catch(() => {});
+      invoke('set_kokoro_speed', { speed: FIXED_SPEED }).catch(() => {});
 
       invoke<AutoReadConfig>('get_auto_read_config')
         .then((config) => {
@@ -375,7 +346,7 @@ export function App() {
           const newItem: HistoryItem = {
             id: Date.now().toString(),
             text: event.payload.trim(),
-            voiceName: selectedVoice,
+            voiceName: FIXED_VOICE,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             wordCount: event.payload.trim().split(/\s+/).length,
           };
@@ -393,21 +364,7 @@ export function App() {
         unlisten.then(u => u());
       };
     }
-  }, [isTauri, selectedVoice]);
-
-  const handleVoiceSelect = (voiceName: string) => {
-    setSelectedVoice(voiceName);
-    if (isTauri) {
-      invoke('set_kokoro_voice', { voice: voiceName }).catch(() => {});
-    }
-  };
-
-  const handleSpeedChange = (newSpeed: number) => {
-    setSpeed(newSpeed);
-    if (isTauri) {
-      invoke('set_kokoro_speed', { speed: newSpeed }).catch(() => {});
-    }
-  };
+  }, [isTauri]);
 
   const handleToggleAutoReadSelection = (enabled: boolean) => {
     setAutoReadSelection(enabled);
@@ -437,27 +394,27 @@ export function App() {
     }
   };
 
-  const handleAuditionVoice = (voiceName: string) => {
-    if (auditioningVoice === voiceName) {
-      setAuditioningVoice(null);
+  const handleAuditionSarah = () => {
+    if (auditioningSarah) {
+      setAuditioningSarah(false);
       if (isTauri) {
         invoke('stop_kokoro_native').catch(() => {});
       }
       return;
     }
 
-    setAuditioningVoice(voiceName);
+    setAuditioningSarah(true);
     if (isTauri) {
       invoke('speak_kokoro_native', {
-        text: `Hi! I'm ${voiceName}. Voxify is running smoothly in your background.`,
-        voice: voiceName,
-        speed: speed,
+        text: "Hi, I'm Sarah. I read any highlighted text across your Windows apps with natural human expression.",
+        voice: FIXED_VOICE,
+        speed: FIXED_SPEED,
       }).catch(() => {});
     }
 
     setTimeout(() => {
-      setAuditioningVoice(prev => (prev === voiceName ? null : prev));
-    }, 4000);
+      setAuditioningSarah(false);
+    }, 4500);
   };
 
   const handlePreviewEarcon = () => {
@@ -467,7 +424,7 @@ export function App() {
   };
 
   const handleTestAudioPill = async () => {
-    const sampleText = `Voxify Audio Pill is running! Select any text anywhere in Windows to hear it read in ${selectedVoice}'s natural voice.`;
+    const sampleText = "Voxify Audio Pill is running! Select any text anywhere in Windows to hear it read in Sarah's natural human voice.";
     const wordCount = sampleText.split(/\s+/).length;
 
     if (isTauri) {
@@ -476,8 +433,8 @@ export function App() {
       await emit('global-hud-status', {
         status: 'staging',
         text: sampleText,
-        voiceName: selectedVoice,
-        speed: speed,
+        voiceName: FIXED_VOICE,
+        speed: FIXED_SPEED,
         wordCount: wordCount,
       } as HudStatusPayload).catch(() => {});
 
@@ -485,15 +442,15 @@ export function App() {
         await emit('global-hud-status', {
           status: 'speaking',
           text: sampleText,
-          voiceName: selectedVoice,
-          speed: speed,
+          voiceName: FIXED_VOICE,
+          speed: FIXED_SPEED,
           wordCount: wordCount,
         } as HudStatusPayload).catch(() => {});
 
         invoke('speak_kokoro_native', {
           text: sampleText,
-          voice: selectedVoice,
-          speed: speed,
+          voice: FIXED_VOICE,
+          speed: FIXED_SPEED,
         }).catch(() => {});
       }, 350);
     }
@@ -506,16 +463,16 @@ export function App() {
       await emit('global-hud-status', {
         status: 'staging',
         text: item.text,
-        voiceName: item.voiceName || selectedVoice,
-        speed: speed,
+        voiceName: FIXED_VOICE,
+        speed: FIXED_SPEED,
         wordCount: item.wordCount,
       } as HudStatusPayload).catch(() => {});
 
       setTimeout(() => {
         invoke('speak_kokoro_native', {
           text: item.text,
-          voice: item.voiceName || selectedVoice,
-          speed: speed,
+          voice: FIXED_VOICE,
+          speed: FIXED_SPEED,
         }).catch(() => {});
       }, 350);
     }
@@ -545,7 +502,7 @@ export function App() {
               </div>
             </div>
 
-            {/* Navigation Tabs */}
+            {/* Navigation Tabs (4 clean sorted tabs) */}
             <nav className="space-y-1">
               {/* General Tab */}
               <button
@@ -558,19 +515,6 @@ export function App() {
               >
                 <Sliders className="w-4 h-4 shrink-0" />
                 <span>General</span>
-              </button>
-
-              {/* Voices Tab */}
-              <button
-                onClick={() => setActiveTab('voices')}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  activeTab === 'voices'
-                    ? 'bg-[#e04f80] text-white font-semibold shadow-md shadow-[#e04f80]/20'
-                    : 'text-slate-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Volume2 className="w-4 h-4 shrink-0" />
-                <span>Voices</span>
               </button>
 
               {/* History Tab */}
@@ -634,7 +578,7 @@ export function App() {
               {/* SECTION: GENERAL / SHORTCUTS */}
               <div className="space-y-3">
                 <h3 className="text-[11px] font-bold tracking-wider text-slate-500 uppercase px-1">
-                  GENERAL
+                  GENERAL & SHORTCUTS
                 </h3>
 
                 <div className="space-y-2">
@@ -711,13 +655,48 @@ export function App() {
                 </div>
               </div>
 
-              {/* SECTION: SOUND & FEEDBACK */}
+              {/* SECTION: VOICE & FEEDBACK */}
               <div className="space-y-3">
                 <h3 className="text-[11px] font-bold tracking-wider text-slate-500 uppercase px-1">
-                  SOUND & FEEDBACK
+                  VOICE & FEEDBACK
                 </h3>
 
                 <div className="space-y-2">
+                  {/* Row: Single Signature Voice (Sarah) */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-white/10 transition-colors">
+                    <div className="flex items-center">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-slate-200">
+                          Neural Voice
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#e04f80]/15 text-[#e04f80] font-semibold border border-[#e04f80]/25">
+                          Sarah (Signature)
+                        </span>
+                      </div>
+                      <InfoTooltip text="Kokoro-82M neural narrator running 100% offline. Calibrated at locked 1.0x natural tempo to prevent buffer underruns and eliminate lag." />
+                    </div>
+                    <button
+                      onClick={handleAuditionSarah}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium border flex items-center gap-1.5 transition-all ${
+                        auditioningSarah
+                          ? 'bg-[#e04f80] text-white border-[#e04f80]'
+                          : 'bg-[#151517] border-white/10 text-slate-300 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      {auditioningSarah ? (
+                        <>
+                          <Square className="w-3 h-3 fill-current" />
+                          <span>Playing</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-3 h-3 fill-current" />
+                          <span>Preview Voice</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
                   {/* Row: Audio Feedback (Earcon Chime) */}
                   <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-white/10 transition-colors">
                     <div className="flex items-center">
@@ -766,164 +745,7 @@ export function App() {
             </div>
           )}
 
-          {/* TAB 2: VOICES */}
-          {activeTab === 'voices' && (
-            <div className="max-w-2xl space-y-7 animate-in fade-in duration-150">
-              {/* SECTION: ACTIVE NEURAL VOICE */}
-              <div className="space-y-3">
-                <h3 className="text-[11px] font-bold tracking-wider text-slate-500 uppercase px-1">
-                  NEURAL MODEL & VOICE
-                </h3>
-
-                <div className="space-y-2">
-                  {/* Row: Voice Selector Dropdown */}
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-white/10 transition-colors">
-                    <div className="flex items-center">
-                      <span className="text-sm font-medium text-slate-200">
-                        Primary Neural Voice
-                      </span>
-                      <InfoTooltip text="Select from 11 human-grade Kokoro-82M neural voices running completely offline on your CPU." />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={selectedVoice}
-                        onChange={(e) => handleVoiceSelect(e.target.value)}
-                        className="bg-[#151517] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-[#e04f80] font-medium"
-                      >
-                        {voices.map((v) => (
-                          <option key={v.id} value={v.name}>
-                            {v.name} ({v.id.startsWith('b') ? 'British' : 'American'} • {v.gender})
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() => handleAuditionVoice(selectedVoice)}
-                        className={`p-1.5 rounded-lg border transition-all ${
-                          auditioningVoice === selectedVoice
-                            ? 'bg-[#e04f80] text-white border-[#e04f80]'
-                            : 'bg-[#151517] border-white/10 text-slate-300 hover:text-white'
-                        }`}
-                        title="Audition Voice"
-                      >
-                        {auditioningVoice === selectedVoice ? (
-                          <Square className="w-3.5 h-3.5 fill-current" />
-                        ) : (
-                          <Play className="w-3.5 h-3.5 fill-current" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Row: Speech Speed Slider */}
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-white/10 transition-colors">
-                    <div className="flex items-center">
-                      <span className="text-sm font-medium text-slate-200">
-                        Speech Speed
-                      </span>
-                      <InfoTooltip text="Controls the cadence and tempo of synthesis (0.5x to 2.0x)." />
-                    </div>
-                    <div className="flex items-center gap-3 w-48 justify-end">
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="2.0"
-                        step="0.05"
-                        value={speed}
-                        onChange={(e) => handleSpeedChange(parseFloat(e.target.value))}
-                        className="w-28 h-1.5 bg-[#151517] rounded-lg appearance-none cursor-pointer accent-[#e04f80]"
-                      />
-                      <span className="text-xs font-mono font-medium text-slate-400 w-12 text-right">
-                        {speed.toFixed(2)}x
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Row: Output Volume */}
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-white/10 transition-colors">
-                    <div className="flex items-center">
-                      <span className="text-sm font-medium text-slate-200">
-                        Volume
-                      </span>
-                      <InfoTooltip text="Audio output master playback volume." />
-                    </div>
-                    <div className="flex items-center gap-3 w-48 justify-end">
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="1"
-                        value={volume}
-                        onChange={(e) => setVolume(parseInt(e.target.value, 10))}
-                        className="w-28 h-1.5 bg-[#151517] rounded-lg appearance-none cursor-pointer accent-[#e04f80]"
-                      />
-                      <span className="text-xs font-mono font-medium text-slate-400 w-12 text-right">
-                        {volume}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* SECTION: AVAILABLE VOICES GRID */}
-              <div className="space-y-3">
-                <h3 className="text-[11px] font-bold tracking-wider text-slate-500 uppercase px-1">
-                  VOICE ROSTER ({voices.length} VOICES)
-                </h3>
-
-                <div className="grid grid-cols-2 gap-2.5">
-                  {voices.map((v) => {
-                    const isSelected = selectedVoice.toLowerCase() === v.name.toLowerCase();
-                    const isAuditioning = auditioningVoice === v.name;
-
-                    return (
-                      <div
-                        key={v.id}
-                        onClick={() => handleVoiceSelect(v.name)}
-                        className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
-                          isSelected
-                            ? 'bg-[#271e25] border-[#e04f80]/60 shadow-sm'
-                            : 'bg-[#202024] border-white/5 hover:border-white/15'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-slate-200">
-                              {v.name}
-                            </span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#151517] text-slate-400 font-medium">
-                              {v.id.startsWith('b') ? '🇬🇧' : '🇺🇸'} {v.gender}
-                            </span>
-                          </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAuditionVoice(v.name);
-                            }}
-                            className={`p-1 rounded-md transition-colors ${
-                              isAuditioning
-                                ? 'bg-[#e04f80] text-white'
-                                : 'text-slate-400 hover:text-white'
-                            }`}
-                          >
-                            {isAuditioning ? (
-                              <Square className="w-3 h-3 fill-current" />
-                            ) : (
-                              <Play className="w-3 h-3 fill-current" />
-                            )}
-                          </button>
-                        </div>
-                        <p className="text-[10px] text-slate-400 mt-1 line-clamp-1">
-                          {v.description}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: HISTORY */}
+          {/* TAB 2: HISTORY */}
           {activeTab === 'history' && (
             <div className="max-w-2xl space-y-4 animate-in fade-in duration-150">
               <div className="flex items-center justify-between px-1">
@@ -959,7 +781,7 @@ export function App() {
                       <div className="flex items-center justify-between text-xs text-slate-400">
                         <span className="font-medium text-slate-300 flex items-center gap-2">
                           <span className="w-1.5 h-1.5 rounded-full bg-[#e04f80]" />
-                          Voice: {item.voiceName} • {item.wordCount} words
+                          Sarah • {item.wordCount} words
                         </span>
                         <span className="font-mono text-[11px]">{item.timestamp}</span>
                       </div>
@@ -989,7 +811,7 @@ export function App() {
             </div>
           )}
 
-          {/* TAB 4: ADVANCED */}
+          {/* TAB 3: ADVANCED */}
           {activeTab === 'advanced' && (
             <div className="max-w-2xl space-y-7 animate-in fade-in duration-150">
               <div className="space-y-3">
@@ -1007,6 +829,30 @@ export function App() {
                     </div>
                     <span className="text-xs font-mono text-slate-400 bg-[#151517] px-2 py-1 rounded-lg border border-white/5">
                       Kokoro-82M ONNX
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5">
+                    <div className="flex items-center">
+                      <span className="text-sm font-medium text-slate-200">
+                        Voice Persona
+                      </span>
+                      <InfoTooltip text="Locked to Sarah (af_sarah) for maximum quality and zero variance in pronunciation." />
+                    </div>
+                    <span className="text-xs font-mono text-slate-300 bg-[#151517] px-2 py-1 rounded-lg border border-white/5">
+                      Sarah (Exclusive)
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5">
+                    <div className="flex items-center">
+                      <span className="text-sm font-medium text-slate-200">
+                        Playout Cadence
+                      </span>
+                      <InfoTooltip text="Locked to calibrated 1.0x natural speed to eliminate buffer drainage lag and guarantee glitch-free playback." />
+                    </div>
+                    <span className="text-xs font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold">
+                      1.00x Calibrated
                     </span>
                   </div>
 
@@ -1050,7 +896,7 @@ export function App() {
             </div>
           )}
 
-          {/* TAB 5: ABOUT */}
+          {/* TAB 4: ABOUT */}
           {activeTab === 'about' && (
             <div className="max-w-2xl space-y-6 animate-in fade-in duration-150">
               <div className="p-6 rounded-2xl bg-[#202024] border border-white/5 space-y-4">
@@ -1067,10 +913,18 @@ export function App() {
                 </div>
 
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Voxify runs silently in your Windows background and instantly speaks any highlighted text across any application using state-of-the-art Kokoro-82M neural synthesis.
+                  Voxify runs silently in your Windows background and instantly speaks any highlighted text across any application using Sarah's natural human voice powered by Kokoro-82M.
                 </p>
 
                 <div className="pt-3 border-t border-white/5 grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2.5 rounded-xl bg-[#151517] border border-white/5">
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Voice Model</span>
+                    <span className="font-mono text-slate-200">Sarah (Kokoro-82M)</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-[#151517] border border-white/5">
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Speed</span>
+                    <span className="text-emerald-400 font-medium">1.00x Natural Pace</span>
+                  </div>
                   <div className="p-2.5 rounded-xl bg-[#151517] border border-white/5">
                     <span className="text-slate-500 block text-[10px] uppercase font-bold">Version</span>
                     <span className="font-mono text-slate-200">v1.0.0 (Production)</span>
@@ -1098,11 +952,11 @@ export function App() {
         </main>
       </div>
 
-      {/* Bottom Status Bar (Spanning across full window width) */}
+      {/* Bottom Status Bar */}
       <footer className="h-8 bg-[#121214] border-t border-white/5 px-4 flex items-center justify-between text-[11px] text-slate-500 select-none shrink-0">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-slate-400 font-medium">Kokoro-82M ONNX Ready</span>
+          <span className="text-slate-400 font-medium">Kokoro-82M (Sarah) • 1.0x Calibrated</span>
         </div>
         <div className="flex items-center gap-3">
           <span>Check for updates</span>

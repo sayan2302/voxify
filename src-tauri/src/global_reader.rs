@@ -918,6 +918,13 @@ pub fn play_selection(app_handle: AppHandle) {
 }
 
 #[tauri::command]
+pub fn pause_speech() {
+    SELECTION_SEQUENCE.fetch_add(1, Ordering::SeqCst);
+    let _ = crate::native_kokoro::stop();
+    let _ = crate::native_tts::stop();
+}
+
+#[tauri::command]
 pub fn trigger_read_selection() {
     #[cfg(target_os = "windows")]
     {

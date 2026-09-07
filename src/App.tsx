@@ -282,24 +282,23 @@ function MiniPillStandalone() {
     };
   }, [hudStatus.status, pillPhase, isHovered]);
 
-  const handleStop = () => {
+
+  const handlePause = () => {
     const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
     if (isTauri) {
-      invoke('stop_speech').catch(() => {});
-      invoke('stop_kokoro_native').catch(() => {});
+      invoke('pause_speech').catch(() => {});
     }
-    setHudStatus({ status: 'idle', text: '', voiceName: FIXED_VOICE, speed: FIXED_SPEED });
-    setPillPhase('compact');
-    setIsPrebufferReady(false);
-    setIsRunwaySafe(false);
-    setBufferedChunks(0);
-    setTotalChunks(0);
+    setHudStatus(prev => ({
+      ...prev,
+      status: 'ready',
+    }));
+    setPillPhase('controls');
   };
 
   const handleTogglePlay = () => {
     const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
     if (hudStatus.status === 'speaking') {
-      handleStop();
+      handlePause();
     } else {
       if (isTauri) {
         invoke('play_selection').catch(() => {});

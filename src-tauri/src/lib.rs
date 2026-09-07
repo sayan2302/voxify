@@ -245,6 +245,7 @@ pub fn run() {
             global_reader::set_earcon_enabled,
             global_reader::play_test_earcon,
             global_reader::play_selection,
+            global_reader::pause_speech,
             global_reader::trigger_read_selection,
             global_reader::stop_speech
         ])

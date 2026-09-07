@@ -372,6 +372,7 @@ pub fn run() {
                     "toggle_auto_read" => {
                         let current = global_reader::AUTO_READ_SELECTION.load(Ordering::Relaxed);
                         global_reader::AUTO_READ_SELECTION.store(!current, Ordering::Relaxed);
+                        global_reader::persist_current_config();
                         let _ = app.emit("auto-read-config-changed", ());
                     }
                     "toggle_earcon" => {
@@ -380,6 +381,7 @@ pub fn run() {
                         if !current {
                             global_reader::play_test_earcon();
                         }
+                        global_reader::persist_current_config();
                         let _ = app.emit("auto-read-config-changed", ());
                     }
                     "read_selection" => {

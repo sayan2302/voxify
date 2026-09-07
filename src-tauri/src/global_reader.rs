@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Mutex;
 use std::thread;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 pub static MASTER_SERVICE_ENABLED: AtomicBool = AtomicBool::new(true);
 pub static AUTO_READ_SELECTION: AtomicBool = AtomicBool::new(false);
@@ -19,6 +19,7 @@ static ACTIVE_SHORTCUT_VK: AtomicU32 = AtomicU32::new(0x20); // VK_SPACE
 static LAST_READ_TEXT: Mutex<Option<String>> = Mutex::new(None);
 static CURRENT_SELECTION_TEXT: Mutex<Option<String>> = Mutex::new(None);
 static SELECTION_SEQUENCE: AtomicU32 = AtomicU32::new(0);
+static APP_HANDLE_STORAGE: Mutex<Option<AppHandle>> = Mutex::new(None);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AutoReadConfig {
@@ -29,6 +30,59 @@ pub struct AutoReadConfig {
     pub activation_shortcut: String,
     pub settle_delay_ms: u32,
     pub earcon_enabled: bool,
+}
+
+impl Default for AutoReadConfig {
+    fn default() -> Self {
+        Self {
+            master_enabled: true,
+            auto_read_selection: false,
+            auto_copy_selection: false,
+            auto_read_copy: false,
+            activation_shortcut: "Win + Alt + S".to_string(),
+            settle_delay_ms: 10,
+            earcon_enabled: true,
+        }
+    }
+}
+
+pub fn get_config_path(app: &AppHandle) -> Option<std::path::PathBuf> {
+    app.path().app_config_dir().ok().map(|p| p.join("config.json"))
+}
+
+pub fn load_config_from_disk(app: &AppHandle) -> AutoReadConfig {
+    if let Some(path) = get_config_path(app) {
+        if path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                if let Ok(cfg) = serde_json::from_str::<AutoReadConfig>(&content) {
+                    println!("[GlobalReader] Loaded saved preferences from disk: {:?}", path);
+                    return cfg;
+                }
+            }
+        }
+    }
+    AutoReadConfig::default()
+}
+
+pub fn save_config_to_disk(app: &AppHandle, config: &AutoReadConfig) {
+    if let Some(path) = get_config_path(app) {
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(json) = serde_json::to_string_pretty(config) {
+            let _ = std::fs::write(&path, json);
+            println!("[GlobalReader] Persisted preferences to disk: {:?}", path);
+        }
+    }
+}
+
+pub fn persist_current_config() {
+    if let Ok(guard) = APP_HANDLE_STORAGE.lock() {
+        if let Some(ref app) = *guard {
+            let cfg = get_auto_read_config();
+            save_config_to_disk(app, &cfg);
+        }
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -509,6 +563,29 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
             let thread_id = GetCurrentThreadId();
             WORKER_THREAD_ID.store(thread_id, Ordering::SeqCst);
 
+            // Store app_handle for config persistence
+            if let Ok(mut storage) = APP_HANDLE_STORAGE.lock() {
+                *storage = Some(app_handle.clone());
+            }
+
+            // Load saved preferences from disk
+            let saved_cfg = load_config_from_disk(&app_handle);
+            MASTER_SERVICE_ENABLED.store(saved_cfg.master_enabled, Ordering::SeqCst);
+            AUTO_READ_SELECTION.store(saved_cfg.auto_read_selection, Ordering::SeqCst);
+            AUTO_COPY_SELECTION.store(saved_cfg.auto_copy_selection, Ordering::SeqCst);
+            AUTO_READ_COPY.store(saved_cfg.auto_read_copy, Ordering::SeqCst);
+            SETTLE_DELAY_MS.store(saved_cfg.settle_delay_ms, Ordering::SeqCst);
+            EARCON_ENABLED.store(saved_cfg.earcon_enabled, Ordering::SeqCst);
+
+            let initial_sc = if !saved_cfg.activation_shortcut.trim().is_empty() {
+                saved_cfg.activation_shortcut
+            } else {
+                "Win + Alt + S".to_string()
+            };
+            if let Ok(mut current) = CURRENT_SHORTCUT.lock() {
+                *current = initial_sc;
+            }
+
             // Register hidden window class for message reception
             let class_name: Vec<u16> = "VoxifyGlobalReaderMsgClass\0".encode_utf16().collect();
             let wc = WNDCLASSW {
@@ -553,22 +630,23 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
             }
 
             // Register global hotkeys
-            // ID 1: Configurable Activation Shortcut (default: Win + Alt + S)
+            // ID 1: Configurable Activation Shortcut
             let (init_mods, init_vk) = {
-                let mut current = CURRENT_SHORTCUT.lock().unwrap();
-                if current.is_empty() {
-                    *current = "Win + Alt + S".to_string();
-                }
+                let current = CURRENT_SHORTCUT.lock().unwrap().clone();
                 let parsed = parse_shortcut_string(&current).unwrap_or((MOD_WIN | MOD_ALT | MOD_NOREPEAT, 0x53));
                 ACTIVE_SHORTCUT_MODS.store(parsed.0, Ordering::Relaxed);
                 ACTIVE_SHORTCUT_VK.store(parsed.1, Ordering::Relaxed);
                 parsed
             };
-            if (init_mods & MOD_WIN) == 0 {
-                let reg_ok = RegisterHotKey(hwnd, 1, init_mods, init_vk);
-                println!("[GlobalReader] Registered activation shortcut '{}' (success: {})", *CURRENT_SHORTCUT.lock().unwrap(), reg_ok != 0);
+            if MASTER_SERVICE_ENABLED.load(Ordering::Relaxed) {
+                if (init_mods & MOD_WIN) == 0 {
+                    let reg_ok = RegisterHotKey(hwnd, 1, init_mods, init_vk);
+                    println!("[GlobalReader] Registered activation shortcut '{}' (success: {})", *CURRENT_SHORTCUT.lock().unwrap(), reg_ok != 0);
+                } else {
+                    println!("[GlobalReader] Activation shortcut uses Win key ('{}'), handled via WH_KEYBOARD_LL hook", *CURRENT_SHORTCUT.lock().unwrap());
+                }
             } else {
-                println!("[GlobalReader] Activation shortcut uses Win key ('{}'), handled via WH_KEYBOARD_LL hook", *CURRENT_SHORTCUT.lock().unwrap());
+                println!("[GlobalReader] Master switch is OFF on launch; activation shortcut not registered to hotkey");
             }
 
             // ID 3: Win + Alt + X (Stop Speech)
@@ -743,6 +821,7 @@ pub fn get_auto_read_config() -> AutoReadConfig {
 #[tauri::command]
 pub fn set_master_enabled(enabled: bool) {
     MASTER_SERVICE_ENABLED.store(enabled, Ordering::SeqCst);
+    persist_current_config();
     #[cfg(target_os = "windows")]
     {
         let thread_id = WORKER_THREAD_ID.load(Ordering::Relaxed);
@@ -770,6 +849,7 @@ pub fn set_activation_shortcut(shortcut: String) {
         if let Ok(mut lock) = CURRENT_SHORTCUT.lock() {
             *lock = clean;
         }
+        persist_current_config();
         #[cfg(target_os = "windows")]
         {
             let thread_id = WORKER_THREAD_ID.load(Ordering::Relaxed);
@@ -795,11 +875,13 @@ pub fn get_activation_shortcut() -> String {
 #[tauri::command]
 pub fn set_auto_read_enabled(enabled: bool) {
     AUTO_READ_SELECTION.store(enabled, Ordering::Relaxed);
+    persist_current_config();
 }
 
 #[tauri::command]
 pub fn set_auto_copy_selection_enabled(enabled: bool) {
     AUTO_COPY_SELECTION.store(enabled, Ordering::Relaxed);
+    persist_current_config();
 }
 
 #[tauri::command]
@@ -810,16 +892,19 @@ pub fn get_auto_copy_selection_enabled() -> bool {
 #[tauri::command]
 pub fn set_auto_read_copy_enabled(enabled: bool) {
     AUTO_READ_COPY.store(enabled, Ordering::Relaxed);
+    persist_current_config();
 }
 
 #[tauri::command]
 pub fn set_settle_delay_ms(delay_ms: u32) {
     SETTLE_DELAY_MS.store(delay_ms.clamp(5, 500), Ordering::Relaxed);
+    persist_current_config();
 }
 
 #[tauri::command]
 pub fn set_earcon_enabled(enabled: bool) {
     EARCON_ENABLED.store(enabled, Ordering::Relaxed);
+    persist_current_config();
 }
 
 #[tauri::command]

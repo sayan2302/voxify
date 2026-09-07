@@ -375,7 +375,14 @@ export function App() {
   const [isRecordingShortcut, setIsRecordingShortcut] = useState<boolean>(false);
 
   // Preferences State
-  const [autoReadSelection, setAutoReadSelection] = useState<boolean>(false);
+  const [autoReadSelection, setAutoReadSelection] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('voxify_auto_read_selection');
+      return saved !== null ? JSON.parse(saved) : false;
+    } catch {
+      return false;
+    }
+  });
   const [autoCopySelection, setAutoCopySelection] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('voxify_auto_copy_selection');
@@ -384,8 +391,22 @@ export function App() {
       return false;
     }
   });
-  const [earconEnabled, setEarconEnabled] = useState<boolean>(true);
-  const [settleDelayMs, setSettleDelayMs] = useState<number>(10);
+  const [earconEnabled, setEarconEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('voxify_earcon_enabled');
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
+  });
+  const [settleDelayMs, setSettleDelayMs] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('voxify_settle_delay_ms');
+      return saved !== null ? JSON.parse(saved) : 10;
+    } catch {
+      return 10;
+    }
+  });
   const [auditioningSarah, setAuditioningSarah] = useState<boolean>(false);
   const [history, setHistory] = useState<HistoryItem[]>(() => {
     try {
@@ -455,20 +476,56 @@ export function App() {
     if (isTauri) {
       invoke('set_kokoro_voice', { voice: FIXED_VOICE }).catch(() => {});
       invoke('set_kokoro_speed', { speed: FIXED_SPEED }).catch(() => {});
-      invoke('set_auto_copy_selection_enabled', { enabled: autoCopySelection }).catch(() => {});
 
+      // Synchronize with Rust's persistent config
       invoke<AutoReadConfig>('get_auto_read_config')
         .then((config) => {
           if (config) {
-            if (config.master_enabled !== undefined) setMasterEnabled(config.master_enabled);
-            setAutoReadSelection(config.auto_read_selection);
-            if (config.auto_copy_selection !== undefined) setAutoCopySelection(config.auto_copy_selection);
-            if (config.activation_shortcut) setActivationShortcut(config.activation_shortcut);
-            setSettleDelayMs(config.settle_delay_ms);
-            setEarconEnabled(config.earcon_enabled);
+            if (config.master_enabled !== undefined) {
+              setMasterEnabled(config.master_enabled);
+              try { localStorage.setItem('voxify_master_enabled', JSON.stringify(config.master_enabled)); } catch {}
+            }
+            if (config.auto_read_selection !== undefined) {
+              setAutoReadSelection(config.auto_read_selection);
+              try { localStorage.setItem('voxify_auto_read_selection', JSON.stringify(config.auto_read_selection)); } catch {}
+            }
+            if (config.auto_copy_selection !== undefined) {
+              setAutoCopySelection(config.auto_copy_selection);
+              try { localStorage.setItem('voxify_auto_copy_selection', JSON.stringify(config.auto_copy_selection)); } catch {}
+            }
+            if (config.activation_shortcut) {
+              setActivationShortcut(config.activation_shortcut);
+              try { localStorage.setItem('voxify_activation_shortcut', config.activation_shortcut); } catch {}
+            }
+            if (config.settle_delay_ms !== undefined) {
+              setSettleDelayMs(config.settle_delay_ms);
+              try { localStorage.setItem('voxify_settle_delay_ms', JSON.stringify(config.settle_delay_ms)); } catch {}
+            }
+            if (config.earcon_enabled !== undefined) {
+              setEarconEnabled(config.earcon_enabled);
+              try { localStorage.setItem('voxify_earcon_enabled', JSON.stringify(config.earcon_enabled)); } catch {}
+            }
           }
         })
         .catch(() => {});
+
+      // Listen for system tray changes to reflect in UI and localStorage
+      const unlistenConfig = listen('auto-read-config-changed', () => {
+        invoke<AutoReadConfig>('get_auto_read_config')
+          .then((config) => {
+            if (config) {
+              if (config.auto_read_selection !== undefined) {
+                setAutoReadSelection(config.auto_read_selection);
+                try { localStorage.setItem('voxify_auto_read_selection', JSON.stringify(config.auto_read_selection)); } catch {}
+              }
+              if (config.earcon_enabled !== undefined) {
+                setEarconEnabled(config.earcon_enabled);
+                try { localStorage.setItem('voxify_earcon_enabled', JSON.stringify(config.earcon_enabled)); } catch {}
+              }
+            }
+          })
+          .catch(() => {});
+      });
 
       // Listen for new selections to record into history (strictly last 5 cached recordings)
       const unlisten = listen<string>('global-selection-text', (event) => {
@@ -520,6 +577,7 @@ export function App() {
       }, 1500);
 
       return () => {
+        unlistenConfig.then(u => u());
         unlisten.then(u => u());
         unlistenStatus.then(u => u());
       };
@@ -554,6 +612,9 @@ export function App() {
 
   const handleToggleAutoReadSelection = (enabled: boolean) => {
     setAutoReadSelection(enabled);
+    try {
+      localStorage.setItem('voxify_auto_read_selection', JSON.stringify(enabled));
+    } catch {}
     if (isTauri) {
       invoke('set_auto_read_enabled', { enabled }).catch(() => {});
     }
@@ -571,6 +632,9 @@ export function App() {
 
   const handleToggleEarcon = (enabled: boolean) => {
     setEarconEnabled(enabled);
+    try {
+      localStorage.setItem('voxify_earcon_enabled', JSON.stringify(enabled));
+    } catch {}
     if (isTauri) {
       invoke('set_earcon_enabled', { enabled }).catch(() => {});
     }
@@ -578,6 +642,9 @@ export function App() {
 
   const handleSettleDelayChange = (delayMs: number) => {
     setSettleDelayMs(delayMs);
+    try {
+      localStorage.setItem('voxify_settle_delay_ms', JSON.stringify(delayMs));
+    } catch {}
     if (isTauri) {
       invoke('set_settle_delay_ms', { delayMs }).catch(() => {});
     }

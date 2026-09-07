@@ -68,24 +68,29 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
     isSafeRef.current = isSafe;
   }, [isSafe]);
 
-  // Track the text that started the current animation cycle
-  const activeTextRef = React.useRef<string>('');
-
   // Notify parent of phase change
   useEffect(() => {
     onPhaseChange?.(phase);
   }, [phase, onPhaseChange]);
 
-  // Dynamic Island progression lifecycle:
-  // Stage 1 (0.0s – 2.1s): Word count & duration cognitive anchor ("{N}w · ~{S}s")
-  // Transition:
-  // - If Chunk 1 / runway is ALREADY safe at 2.1s -> Blooms directly into [ ▶ Play ]!
-  // - If still synthesizing -> Expands into Stage 2 ("Almost ready..." with animated equalizer)
-  // - The moment runway becomes safe in Stage 2 -> Immediately blossoms into [ ▶ Play ]!
+  // If audio is actively speaking, ensure pill is always in 'controls'
+  useEffect(() => {
+    if (isSpeaking) {
+      setPhase('controls');
+    }
+  }, [isSpeaking]);
+
+  // Reset to compact when status becomes idle or text is cleared
   useEffect(() => {
     if (!currentText || status === 'idle') {
-      activeTextRef.current = '';
       setPhase('compact');
+    }
+  }, [currentText, status]);
+
+  // Dynamic Island progression lifecycle:
+  // Runs whenever new text is selected. Shows droplet drop & word count for 1.4s, then smoothly blooms into [ ▶ Play ] controls.
+  useEffect(() => {
+    if (!currentText || status === 'idle') {
       return;
     }
 
@@ -94,46 +99,19 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
       return;
     }
 
-    // If this text is already active (e.g. user paused playback or is resting in controls),
-    // NEVER revert to compact or re-drop the pill!
-    if (activeTextRef.current === currentText) {
-      return;
-    }
-
-    // Brand new text selection arrived: trigger top drop and start Stage 1
-    activeTextRef.current = currentText;
+    // Trigger gravity drop and start at compact Stage 1
     setDropKey((prev) => prev + 1);
     setPhase('compact');
 
-    const STAGE1_DURATION = 2100; // 2.1s (+1.0s extended) comfortable glance window for droplet descent & word count
-
+    // 1.4s comfortable cognitive glance window for word count & duration
     const stage1Timer = setTimeout(() => {
-      if (isSafeRef.current) {
-        // Runway is already safe in RAM: bloom directly into Play controls!
-        setPhase('controls');
-      } else {
-        // Still synthesizing: unfold to "Almost ready..." with animated equalizer
-        setPhase((prev) => (prev === 'compact' ? 'expanding' : prev));
-      }
-    }, STAGE1_DURATION);
+      setPhase('controls');
+    }, 1400);
 
     return () => {
       clearTimeout(stage1Timer);
     };
-  }, [currentText, isSpeaking, status]);
-
-  // Synchronized Bloom into Controls:
-  // The moment runway becomes safe while in 'expanding' (Stage 2), bloom into controls!
-  useEffect(() => {
-    if (!currentText || status === 'idle') return;
-    if (isSpeaking) {
-      setPhase('controls');
-      return;
-    }
-    if (phase === 'expanding' && isSafe) {
-      setPhase('controls');
-    }
-  }, [isSafe, phase, isSpeaking, currentText, status]);
+  }, [currentText]);
 
   // Hover: never skip or force controls prematurely during Stage 1 or Stage 2
   const handleMouseEnter = () => {

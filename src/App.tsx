@@ -340,7 +340,13 @@ export function App() {
   const [history, setHistory] = useState<HistoryItem[]>(() => {
     try {
       const saved = localStorage.getItem('voxify_history');
-      return saved ? JSON.parse(saved) : [];
+      if (!saved) return [];
+      const parsed: HistoryItem[] = JSON.parse(saved);
+      const pruned = parsed.slice(0, 5);
+      if (parsed.length > 5) {
+        localStorage.setItem('voxify_history', JSON.stringify(pruned));
+      }
+      return pruned;
     } catch {
       return [];
     }
@@ -411,7 +417,7 @@ export function App() {
         })
         .catch(() => {});
 
-      // Listen for new selections to record into history
+      // Listen for new selections to record into history (strictly last 5 cached recordings)
       const unlisten = listen<string>('global-selection-text', (event) => {
         if (event.payload && event.payload.trim()) {
           const newItem: HistoryItem = {
@@ -422,7 +428,8 @@ export function App() {
             wordCount: event.payload.trim().split(/\s+/).length,
           };
           setHistory(prev => {
-            const updated = [newItem, ...prev.filter(item => item.text !== newItem.text)].slice(0, 30);
+            // Keep strictly last 5 recordings; older ones are automatically deleted
+            const updated = [newItem, ...prev.filter(item => item.text !== newItem.text)].slice(0, 5);
             try {
               localStorage.setItem('voxify_history', JSON.stringify(updated));
             } catch {}
@@ -441,6 +448,23 @@ export function App() {
           }
         }
       });
+
+      // Pre-warm the last 5 cached history recordings in background for instant re-reading
+      setTimeout(() => {
+        const saved = localStorage.getItem('voxify_history');
+        if (saved) {
+          try {
+            const items: HistoryItem[] = JSON.parse(saved).slice(0, 5);
+            for (const item of items) {
+              invoke('prebuffer_text_background', {
+                text: item.text,
+                voice: item.voiceName || FIXED_VOICE,
+                speed: FIXED_SPEED,
+              }).catch(() => {});
+            }
+          } catch {}
+        }
+      }, 1500);
 
       return () => {
         unlisten.then(u => u());
@@ -584,6 +608,16 @@ export function App() {
         }).catch(() => {});
       }, 350);
     }
+  };
+
+  const handleDeleteHistoryItem = (id: string) => {
+    setHistory(prev => {
+      const updated = prev.filter(item => item.id !== id);
+      try {
+        localStorage.setItem('voxify_history', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
   };
 
   const handleClearHistory = () => {
@@ -887,13 +921,18 @@ export function App() {
             </div>
           )}
 
-          {/* TAB 2: HISTORY */}
+          {/* TAB 2: HISTORY (Last 5 Cached Recordings) */}
           {activeTab === 'history' && (
             <div className="max-w-2xl space-y-4 animate-in fade-in duration-150">
               <div className="flex items-center justify-between px-1">
-                <h3 className="text-[11px] font-bold tracking-wider text-slate-500 uppercase">
-                  RECENT READINGS ({history.length})
-                </h3>
+                <div className="flex items-center gap-2.5">
+                  <h3 className="text-[11px] font-bold tracking-wider text-slate-500 uppercase">
+                    RECENT READINGS ({history.length}/5)
+                  </h3>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#2563eb]/20 text-[#93c5fd] font-medium border border-[#2563eb]/30">
+                    Last 5 Cached
+                  </span>
+                </div>
                 {history.length > 0 && (
                   <button
                     onClick={handleClearHistory}
@@ -908,9 +947,9 @@ export function App() {
               {history.length === 0 ? (
                 <div className="p-12 text-center rounded-2xl bg-[#202024] border border-white/5 space-y-2">
                   <History className="w-8 h-8 text-slate-600 mx-auto" />
-                  <p className="text-sm font-medium text-slate-400">No recent clippings captured</p>
+                  <p className="text-sm font-medium text-slate-400">No cached readings yet</p>
                   <p className="text-xs text-slate-500">
-                    Highlight any text in any app, or press <code className="text-slate-300 font-mono text-[11px] px-1 py-0.5 rounded bg-white/5 border border-white/10">{activationShortcut}</code> to summon the audio pill.
+                    Highlight any text in any app, or press <code className="text-slate-300 font-mono text-[11px] px-1 py-0.5 rounded bg-white/5 border border-white/10">{activationShortcut}</code> to read and cache up to 5 recordings.
                   </p>
                 </div>
               ) : (
@@ -924,26 +963,40 @@ export function App() {
                         <span className="font-medium text-slate-300 flex items-center gap-2">
                           <span className="w-1.5 h-1.5 rounded-full bg-[#2563eb]" />
                           Sarah • {item.wordCount} words
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-mono font-medium">
+                            CACHED
+                          </span>
                         </span>
                         <span className="font-mono text-[11px]">{item.timestamp}</span>
                       </div>
                       <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed font-serif select-text">
                         "{item.text}"
                       </p>
-                      <div className="flex items-center gap-2 pt-1">
+                      <div className="flex items-center justify-between pt-1">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleReReadHistoryItem(item)}
+                            className="px-2.5 py-1 rounded-lg bg-[#151517] hover:bg-[#2563eb] hover:text-white text-[11px] text-slate-300 border border-white/5 flex items-center gap-1.5 transition-colors"
+                            title="Re-read instantly from cache"
+                          >
+                            <Play className="w-2.5 h-2.5 fill-current" />
+                            <span>Re-Read</span>
+                          </button>
+                          <button
+                            onClick={() => navigator.clipboard.writeText(item.text)}
+                            className="px-2.5 py-1 rounded-lg bg-[#151517] hover:bg-slate-700 text-[11px] text-slate-400 hover:text-white border border-white/5 flex items-center gap-1.5 transition-colors"
+                            title="Copy text to clipboard"
+                          >
+                            <Copy className="w-2.5 h-2.5" />
+                            <span>Copy</span>
+                          </button>
+                        </div>
                         <button
-                          onClick={() => handleReReadHistoryItem(item)}
-                          className="px-2.5 py-1 rounded-lg bg-[#151517] hover:bg-[#2563eb] hover:text-white text-[11px] text-slate-300 border border-white/5 flex items-center gap-1.5 transition-colors"
+                          onClick={() => handleDeleteHistoryItem(item.id)}
+                          className="p-1 rounded-lg bg-[#151517] hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 border border-white/5 transition-colors"
+                          title="Delete from cached history"
                         >
-                          <Play className="w-2.5 h-2.5 fill-current" />
-                          <span>Re-Read</span>
-                        </button>
-                        <button
-                          onClick={() => navigator.clipboard.writeText(item.text)}
-                          className="px-2.5 py-1 rounded-lg bg-[#151517] hover:bg-slate-700 text-[11px] text-slate-400 hover:text-white border border-white/5 flex items-center gap-1.5 transition-colors"
-                        >
-                          <Copy className="w-2.5 h-2.5" />
-                          <span>Copy</span>
+                          <Trash2 className="w-3 h-3" />
                         </button>
                       </div>
                     </div>

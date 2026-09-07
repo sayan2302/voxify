@@ -199,6 +199,13 @@ fn get_kokoro_speed() -> f32 {
     native_kokoro::get_current_speed()
 }
 
+#[tauri::command]
+fn prebuffer_text_background(text: String, voice: Option<String>, speed: Option<f32>) {
+    let v = voice.unwrap_or_else(|| native_kokoro::get_current_voice_name());
+    let s = speed.unwrap_or_else(|| native_kokoro::get_current_speed());
+    native_kokoro::prebuffer_first_chunk(&text, &v, s);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -214,6 +221,7 @@ pub fn run() {
             set_native_voice,
             speak_kokoro_native,
             stop_kokoro_native,
+            prebuffer_text_background,
             get_kokoro_voices,
             set_kokoro_voice,
             set_kokoro_speed,

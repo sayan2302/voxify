@@ -50,12 +50,23 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
 }) => {
   const [dropKey, setDropKey] = useState<number>(0);
   const [phase, setPhase] = useState<'compact' | 'expanding' | 'controls'>('compact');
-  const [minDisguiseElapsed, setMinDisguiseElapsed] = useState<boolean>(false);
 
   const computedWordCount = wordCount ?? (currentText ? currentText.trim().split(/\s+/).filter(Boolean).length : 0);
   const estimatedSeconds = Math.max(1, Math.round(computedWordCount / 2.6));
   const isSpeaking = isPlaying || status === 'speaking';
   const isFinished = status === 'finished';
+
+  // Calculate if safe audio runway has been established in RAM
+  const isSafe = Boolean(
+    isRunwaySafe ||
+    (isPrebufferReady && totalChunks === 1) ||
+    (bufferedChunks !== undefined && totalChunks !== undefined && totalChunks > 0 && bufferedChunks >= totalChunks)
+  );
+
+  const isSafeRef = React.useRef(isSafe);
+  useEffect(() => {
+    isSafeRef.current = isSafe;
+  }, [isSafe]);
 
   // Trigger Top-Bezel Drop CSS keyframes on every new text selection
   useEffect(() => {
@@ -70,9 +81,11 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
   }, [phase, onPhaseChange]);
 
   // Dynamic Island progression lifecycle:
-  // Stage 1 (0.0s – 3.0s): Word count & duration (gives user 3.0s to read comfortably)
-  // Stage 2 (3.0s – 7.0s): Studio Voice Calibration (gives Kokoro uninterrupted head start)
-  // Stage 3 (7.0s+): Smooth Bloom into Controls ([ ▶ Play ] ... [ ✕ Close ])
+  // Stage 1 (0.0s – 1.1s): Word count & duration cognitive anchor ("{N}w · ~{S}s")
+  // Transition:
+  // - If Chunk 1 / runway is ALREADY safe at 1.1s -> Blooms directly into [ ▶ Play ]!
+  // - If still synthesizing -> Expands into Stage 2 ("Almost ready..." with animated equalizer)
+  // - The moment runway becomes safe in Stage 2 -> Immediately blossoms into [ ▶ Play ]!
   useEffect(() => {
     if (isSpeaking) {
       setPhase('controls');
@@ -81,44 +94,35 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
 
     // Reset to compact on every new text selection
     setPhase('compact');
-    setMinDisguiseElapsed(false);
 
-    const stage1Duration = 4000; // 4.0s word count & duration anchor (+1s as requested)
-    const stage2Duration = 4000; // 4.0s 'Almost ready...' with animated equalizer
+    const STAGE1_DURATION = 1100; // 1.1s tactile glance window for droplet descent & word count
 
-    // Stage 1 -> Stage 2: Ribbon Unfold (at 4.0s)
-    const stage2Timer = setTimeout(() => {
-      setPhase((prev) => (prev === 'compact' ? 'expanding' : prev));
-    }, stage1Duration);
-
-    // Minimum disguise window of 8.0s (gives Kokoro 8.0s uninterrupted head start)
-    const stage3Timer = setTimeout(() => {
-      setMinDisguiseElapsed(true);
-    }, stage1Duration + stage2Duration);
+    const stage1Timer = setTimeout(() => {
+      if (isSafeRef.current) {
+        // Runway is already safe in RAM: bloom directly into Play controls!
+        setPhase('controls');
+      } else {
+        // Still synthesizing: unfold to "Almost ready..." with animated equalizer
+        setPhase((prev) => (prev === 'compact' ? 'expanding' : prev));
+      }
+    }, STAGE1_DURATION);
 
     return () => {
-      clearTimeout(stage2Timer);
-      clearTimeout(stage3Timer);
+      clearTimeout(stage1Timer);
     };
   }, [currentText, isSpeaking]);
 
   // Synchronized Bloom into Controls:
-  // ONLY bloom into [ ▶ Play ] once BOTH conditions are met:
-  // 1. Full 8.0s disguise progression has completed (4s words + 4s almost ready)
-  // 2. Safe audio runway is guaranteed in RAM (isRunwaySafe or all chunks ready)
-  // This physically guarantees < 1ms instant playout upon clicking Play with ZERO possibility of silence!
+  // The moment runway becomes safe while in 'expanding' (Stage 2), bloom into controls!
   useEffect(() => {
     if (isSpeaking) {
       setPhase('controls');
       return;
     }
-    if (minDisguiseElapsed) {
-      const isSafe = isRunwaySafe || (isPrebufferReady && totalChunks === 1) || (bufferedChunks !== undefined && totalChunks !== undefined && totalChunks > 0 && bufferedChunks >= totalChunks);
-      if (isSafe) {
-        setPhase('controls');
-      }
+    if (phase === 'expanding' && isSafe) {
+      setPhase('controls');
     }
-  }, [minDisguiseElapsed, isRunwaySafe, isPrebufferReady, bufferedChunks, totalChunks, isSpeaking]);
+  }, [isSafe, phase, isSpeaking]);
 
   // Hover: never skip or force controls prematurely during Stage 1 or Stage 2
   const handleMouseEnter = () => {

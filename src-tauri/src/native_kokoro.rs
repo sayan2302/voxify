@@ -1014,12 +1014,13 @@ pub fn is_runway_safe_condition(ready_count: usize, total_chunks: usize, cumulat
     if total_chunks == 0 {
         return false;
     }
+    if ready_count >= total_chunks {
+        return true;
+    }
     if total_chunks == 1 {
         ready_count >= 1
-    } else if total_chunks == 2 {
-        ready_count >= 2
     } else {
-        ready_count == total_chunks || (ready_count >= 2 && cumulative_dur >= 7.0)
+        ready_count >= 2 || (ready_count >= 1 && cumulative_dur >= 2.5)
     }
 }
 
@@ -1167,8 +1168,8 @@ pub fn prebuffer_first_chunk(text: &str, voice_name: &str, speed: f32) {
 
     // Spawn dedicated sequential worker on the single focused engine
     std::thread::spawn(move || {
-        // Yield 600ms of completely un-contended CPU to let the entrance droplet animation run with 120fps smoothness
-        std::thread::sleep(std::time::Duration::from_millis(600));
+        // Yield 50ms of CPU to let the entrance droplet animation smoothly mount
+        std::thread::sleep(std::time::Duration::from_millis(50));
 
         for (idx, chunk) in chunks.into_iter().enumerate() {
             if PIPELINE_SESSION_ID.load(Ordering::Relaxed) != session_id {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Pause, X, Check } from 'lucide-react';
+import { Play, Pause, X, Check, FileText, Clock } from 'lucide-react';
 
 export interface MiniPillPlayerProps {
   currentText: string;
@@ -168,14 +168,26 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
 
 
           {phase === 'compact' && !isSpeaking ? (
-            /* Stage 1: Word Count & Duration Cognitive Anchor (4.0s) - Sequentially reveals after liquid forms */
-            <div className="w-full flex items-center justify-center gap-2 animate-water-content relative z-10 px-1">
-              <span className="relative flex h-2 w-2 shrink-0">
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#3b82f6] shadow-[0_0_8px_rgba(59,130,246,0.9)]" />
-              </span>
-              <span className="text-[12px] font-semibold tracking-wide text-slate-100 tabular-nums whitespace-nowrap">
-                {computedWordCount > 0 ? `${computedWordCount}w · ~${estimatedSeconds}s` : 'Reading'}
-              </span>
+            /* Stage 1: Word Count & Expected Time with Small Icons */
+            <div className="w-full flex items-center justify-center gap-3 animate-water-content relative z-10 px-2">
+              {/* Word Count with Document Icon */}
+              <div className="flex items-center gap-1.5 text-slate-300">
+                <FileText className="w-3 h-3 text-[#60a5fa] shrink-0" />
+                <span className="text-[11px] font-semibold text-white tabular-nums tracking-tight">
+                  {computedWordCount > 0 ? `${computedWordCount}w` : 'Reading'}
+                </span>
+              </div>
+
+              {/* Subtle vertical divider */}
+              <span className="w-[1px] h-2.5 bg-white/20 shrink-0" />
+
+              {/* Expected Time with Clock Icon */}
+              <div className="flex items-center gap-1.5 text-slate-300">
+                <Clock className="w-3 h-3 text-[#93c5fd] shrink-0" />
+                <span className="text-[11px] font-semibold text-white tabular-nums tracking-tight">
+                  {estimatedSeconds}s
+                </span>
+              </div>
             </div>
           ) : phase === 'expanding' && !isSpeaking ? (
             /* Stage 2: 'Almost ready...' with Animated Equalizer Bars */

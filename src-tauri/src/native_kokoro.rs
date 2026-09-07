@@ -401,22 +401,26 @@ pub fn init(model_dir: Option<&Path>) -> Result<(), String> {
     };
 
     let audition_text = "Hi, I'm Sarah. I read any highlighted text across your Windows apps with natural human expression.";
-    let audition_chunks = split_into_speech_chunks(audition_text);
-    for chunk in &audition_chunks {
-        if let Some(audio) = tts.generate_with_config(chunk, &warmup_cfg, None::<fn(&[f32], f32) -> bool>) {
-            let raw_samples = audio.samples();
-            let sr = audio.sample_rate() as u32;
-            if !raw_samples.is_empty() {
-                let pause_ms = get_chunk_pause_ms(chunk);
-                let chunk_samples = prepare_chunk_samples(raw_samples, sr, pause_ms);
-                let chunk_dur = chunk_samples.len() as f32 / sr as f32;
-                cache_audio_chunk(1, 100, chunk, chunk_samples, sr, chunk_dur, pause_ms);
+    let test_pill_text = "Voxify Audio Pill is running! Select any text anywhere in Windows to hear it read in Sarah's natural human voice.";
+
+    let pre_cache_texts = [audition_text, test_pill_text];
+    for text in &pre_cache_texts {
+        let chunks = split_into_speech_chunks(text);
+        for chunk in &chunks {
+            if let Some(audio) = tts.generate_with_config(chunk, &warmup_cfg, None::<fn(&[f32], f32) -> bool>) {
+                let raw_samples = audio.samples();
+                let sr = audio.sample_rate() as u32;
+                if !raw_samples.is_empty() {
+                    let pause_ms = get_chunk_pause_ms(chunk);
+                    let chunk_samples = prepare_chunk_samples(raw_samples, sr, pause_ms);
+                    let chunk_dur = chunk_samples.len() as f32 / sr as f32;
+                    cache_audio_chunk(1, 100, chunk, chunk_samples, sr, chunk_dur, pause_ms);
+                }
             }
         }
     }
     println!(
-        "[NativeKokoro] Pre-cached Sarah's signature audition voice ({} chunks in RAM) for instant 0ms playback!",
-        audition_chunks.len()
+        "[NativeKokoro] Pre-cached Sarah's signature audition & test pill audio in RAM for instant 0ms playback!"
     );
 
     if let Ok(mut guard) = TTS_ENGINES.lock() {

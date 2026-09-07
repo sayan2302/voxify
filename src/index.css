@@ -193,8 +193,8 @@
   width: 50px;
   height: 50px;
   border-radius: 9999px;
-  border: 1.5px solid rgba(179, 27, 84, 0.55);
-  box-shadow: 0 0 16px rgba(113, 0, 48, 0.55);
+  border: 1.5px solid rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 16px rgba(37, 99, 235, 0.45);
   animation: waterDropRipple 0.55s cubic-bezier(0.1, 0.8, 0.3, 1) 0.36s both;
   will-change: transform, opacity;
   transform: translateZ(0);

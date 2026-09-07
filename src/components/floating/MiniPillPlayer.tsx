@@ -152,12 +152,12 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
         <div
           className={`relative overflow-hidden rounded-full bg-[#080d1a] flex items-center justify-between select-none text-white cursor-default ${
             phase === 'compact' && !isSpeaking
-              ? 'animate-water-morph w-[118px] h-[38px] px-3 border border-white/20 shadow-[0_8px_24px_rgba(0,0,0,0.75),0_0_14px_rgba(37,99,235,0.35),inset_0_1px_2px_rgba(255,255,255,0.25)]'
+              ? 'animate-water-morph w-[152px] h-[38px] px-3 border border-white/20 shadow-[0_8px_24px_rgba(0,0,0,0.75),0_0_14px_rgba(37,99,235,0.35),inset_0_1px_2px_rgba(255,255,255,0.25)]'
               : phase === 'expanding' && !isSpeaking
-              ? 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[178px] h-[38px] px-3 border border-[#2563eb]/60 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_18px_rgba(59,130,246,0.35)]'
+              ? 'transition-[border-color,box-shadow] duration-300 w-[152px] h-[38px] px-3 border border-[#2563eb]/60 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_18px_rgba(59,130,246,0.35)]'
               : isSpeaking
-              ? 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[152px] h-[38px] pl-[5px] pr-[7px] border border-[#3b82f6]/60 shadow-[0_8px_30px_rgba(29,78,216,0.5),0_0_18px_rgba(59,130,246,0.35)]'
-              : 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[152px] h-[38px] pl-[5px] pr-[7px] border border-white/25 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_14px_rgba(37,99,235,0.25)]'
+              ? 'transition-[border-color,box-shadow] duration-300 w-[152px] h-[38px] pl-[5px] pr-[7px] border border-[#3b82f6]/60 shadow-[0_8px_30px_rgba(29,78,216,0.5),0_0_18px_rgba(59,130,246,0.35)]'
+              : 'transition-[border-color,box-shadow] duration-300 w-[152px] h-[38px] pl-[5px] pr-[7px] border border-white/25 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_14px_rgba(37,99,235,0.25)]'
           }`}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={onMouseLeave}

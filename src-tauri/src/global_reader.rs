@@ -3,12 +3,14 @@ use std::sync::Mutex;
 use std::thread;
 use tauri::{AppHandle, Emitter};
 
-pub static AUTO_READ_SELECTION: AtomicBool = AtomicBool::new(true);
+pub static MASTER_SERVICE_ENABLED: AtomicBool = AtomicBool::new(true);
+pub static AUTO_READ_SELECTION: AtomicBool = AtomicBool::new(false);
 pub static AUTO_READ_COPY: AtomicBool = AtomicBool::new(false);
 pub static SETTLE_DELAY_MS: AtomicU32 = AtomicU32::new(10);
 pub static EARCON_ENABLED: AtomicBool = AtomicBool::new(true);
 static IS_SIMULATING_COPY: AtomicBool = AtomicBool::new(false);
 static WORKER_THREAD_ID: AtomicU32 = AtomicU32::new(0);
+static CURRENT_SHORTCUT: Mutex<String> = Mutex::new(String::new());
 
 // Keep track of the last read text to avoid duplicate loops
 static LAST_READ_TEXT: Mutex<Option<String>> = Mutex::new(None);
@@ -17,8 +19,10 @@ static SELECTION_SEQUENCE: AtomicU32 = AtomicU32::new(0);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AutoReadConfig {
+    pub master_enabled: bool,
     pub auto_read_selection: bool,
     pub auto_read_copy: bool,
+    pub activation_shortcut: String,
     pub settle_delay_ms: u32,
     pub earcon_enabled: bool,
 }
@@ -45,13 +49,16 @@ mod win32 {
     pub const WM_HOTKEY: u32 = 0x0312;
     pub const WM_CLIPBOARDUPDATE: u32 = 0x031D;
     pub const WM_USER_SELECTION_ACTION: u32 = 0x0400 + 101;
+    pub const WM_USER_UPDATE_HOTKEY: u32 = 0x0400 + 102;
     pub const CF_UNICODETEXT: u32 = 13;
 
     pub const MOD_ALT: u32 = 0x0001;
     pub const MOD_CONTROL: u32 = 0x0002;
+    pub const MOD_SHIFT: u32 = 0x0004;
     pub const MOD_WIN: u32 = 0x0008;
     pub const MOD_NOREPEAT: u32 = 0x4000;
 
+    pub const VK_SPACE: u8 = 0x20;
     pub const VK_CONTROL: u8 = 0x11;
     pub const VK_C: u8 = 0x43;
     pub const KEYEVENTF_KEYUP: u32 = 0x0002;
@@ -142,7 +149,7 @@ mod win32 {
     static mut LAST_UP_PT: POINT = POINT { x: 0, y: 0 };
 
     pub unsafe extern "system" fn mouse_hook_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
-        if n_code >= 0 && AUTO_READ_SELECTION.load(Ordering::Relaxed) {
+        if n_code >= 0 && AUTO_READ_SELECTION.load(Ordering::Relaxed) && MASTER_SERVICE_ENABLED.load(Ordering::Relaxed) {
             let hook_struct = *(l_param as *const MSLLHOOKSTRUCT);
             let msg = w_param as u32;
 
@@ -238,6 +245,47 @@ mod win32 {
             }
         }
     }
+}
+
+pub fn parse_shortcut_string(s: &str) -> Option<(u32, u32)> {
+    let clean = s.trim();
+    if clean.is_empty() {
+        return None;
+    }
+
+    let mut mods = win32::MOD_NOREPEAT;
+    let mut vk = None;
+
+    let parts: Vec<&str> = clean.split('+').map(|p| p.trim()).collect();
+    for part in parts {
+        let lower = part.to_lowercase();
+        match lower.as_str() {
+            "shift" => mods |= win32::MOD_SHIFT,
+            "ctrl" | "control" => mods |= win32::MOD_CONTROL,
+            "alt" => mods |= win32::MOD_ALT,
+            "win" | "windows" | "super" | "meta" => mods |= win32::MOD_WIN,
+            "space" => vk = Some(win32::VK_SPACE as u32),
+            "esc" | "escape" => vk = Some(0x1B),
+            "enter" | "return" => vk = Some(0x0D),
+            "tab" => vk = Some(0x09),
+            other => {
+                if other.starts_with('f') && other.len() <= 3 {
+                    if let Ok(num) = other[1..].parse::<u32>() {
+                        if (1..=12).contains(&num) {
+                            vk = Some(0x70 + num - 1);
+                        }
+                    }
+                } else if other.len() == 1 {
+                    let c = other.chars().next().unwrap().to_ascii_uppercase();
+                    if c.is_ascii_alphanumeric() {
+                        vk = Some(c as u32);
+                    }
+                }
+            }
+        }
+    }
+
+    vk.map(|k| (mods, k))
 }
 
 pub fn handle_new_selection(app_handle: &AppHandle, text: String) {
@@ -387,10 +435,17 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
             }
 
             // Register global hotkeys
-            // ID 1: Win + Alt + S (Read Selection)
-            RegisterHotKey(hwnd, 1, MOD_WIN | MOD_ALT | MOD_NOREPEAT, 0x53);
-            // ID 2: Ctrl + Alt + S (Read Selection fallback)
-            RegisterHotKey(hwnd, 2, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 0x53);
+            // ID 1: Configurable Activation Shortcut (default: Shift + Space)
+            let (init_mods, init_vk) = {
+                let mut current = CURRENT_SHORTCUT.lock().unwrap();
+                if current.is_empty() {
+                    *current = "Shift + Space".to_string();
+                }
+                parse_shortcut_string(&current).unwrap_or((MOD_SHIFT | MOD_NOREPEAT, VK_SPACE as u32))
+            };
+            let reg_ok = RegisterHotKey(hwnd, 1, init_mods, init_vk);
+            println!("[GlobalReader] Registered activation shortcut 'Shift + Space' (success: {})", reg_ok != 0);
+
             // ID 3: Win + Alt + X (Stop Speech)
             RegisterHotKey(hwnd, 3, MOD_WIN | MOD_ALT | MOD_NOREPEAT, 0x58);
             // ID 4: Ctrl + Alt + X (Stop Speech fallback)
@@ -402,7 +457,21 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
             let mut msg: MSG = std::mem::zeroed();
 
             while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 {
-                if msg.message == WM_USER_SELECTION_ACTION {
+                if msg.message == WM_USER_UPDATE_HOTKEY {
+                    UnregisterHotKey(hwnd, 1);
+                    if MASTER_SERVICE_ENABLED.load(Ordering::Relaxed) {
+                        let sc = CURRENT_SHORTCUT.lock().unwrap().clone();
+                        if let Some((mods, vk)) = parse_shortcut_string(&sc) {
+                            let ok = RegisterHotKey(hwnd, 1, mods, vk);
+                            println!("[GlobalReader] Re-registered activation shortcut '{}' (mods: 0x{:X}, vk: 0x{:X}, success: {})", sc, mods, vk, ok != 0);
+                        }
+                    } else {
+                        println!("[GlobalReader] Master switch is OFF: activation shortcut unregistered");
+                    }
+                } else if msg.message == WM_USER_SELECTION_ACTION {
+                    if !MASTER_SERVICE_ENABLED.load(Ordering::Relaxed) {
+                        continue;
+                    }
                     // Let target application finalize text selection
                     let delay = SETTLE_DELAY_MS.load(Ordering::Relaxed);
                     Sleep(delay);
@@ -421,19 +490,46 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
                     }
                 } else if msg.message == WM_HOTKEY {
                     let hotkey_id = msg.w_param as i32;
-                    if hotkey_id == 1 || hotkey_id == 2 {
-                        // User pressed Read Selection hotkey
+                    if hotkey_id == 1 {
+                        if !MASTER_SERVICE_ENABLED.load(Ordering::Relaxed) {
+                            continue;
+                        }
+
+                        // If already speaking, pressing activation shortcut stops/pauses playback
+                        if crate::native_kokoro::is_speaking() {
+                            stop_all_speech(&app_handle);
+                            continue;
+                        }
+
+                        // User pressed Activation Shortcut (e.g. Shift + Space)
+                        // Capture currently highlighted text
                         simulate_copy_keystrokes();
-                        Sleep(15);
+                        Sleep(30);
                         IS_SIMULATING_COPY.store(false, Ordering::SeqCst);
 
                         if let Some(text) = read_clipboard_text() {
-                            let mut last = LAST_READ_TEXT.lock().unwrap();
-                            *last = Some(text.clone());
-                            let mut current = CURRENT_SELECTION_TEXT.lock().unwrap();
-                            *current = Some(text.clone());
+                            if text.len() >= 2 {
+                                let is_same_text = {
+                                    let current = CURRENT_SELECTION_TEXT.lock().unwrap();
+                                    current.as_ref().map(|c| c == &text).unwrap_or(false)
+                                };
+
+                                let is_safe = crate::native_kokoro::is_active_session_runway_safe(
+                                    &text,
+                                    &crate::native_kokoro::get_current_voice_name(),
+                                    crate::native_kokoro::get_current_speed(),
+                                );
+
+                                if is_same_text && is_safe {
+                                    play_current_selection(&app_handle);
+                                } else {
+                                    if let Ok(mut last) = LAST_READ_TEXT.lock() {
+                                        *last = Some(text.clone());
+                                    }
+                                    handle_new_selection(&app_handle, text);
+                                }
+                            }
                         }
-                        play_current_selection(&app_handle);
                     } else if hotkey_id == 3 || hotkey_id == 4 {
                         // User pressed Stop Speech hotkey
                         stop_all_speech(&app_handle);
@@ -441,7 +537,7 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
                 } else if msg.message == WM_CLIPBOARDUPDATE {
                     if IS_SIMULATING_COPY.load(Ordering::SeqCst) {
                         // Ignore our own simulated copy
-                    } else if AUTO_READ_COPY.load(Ordering::Relaxed) {
+                    } else if AUTO_READ_COPY.load(Ordering::Relaxed) && MASTER_SERVICE_ENABLED.load(Ordering::Relaxed) {
                         Sleep(30);
                         if let Some(text) = read_clipboard_text() {
                             let mut last = LAST_READ_TEXT.lock().unwrap();
@@ -463,7 +559,6 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
             }
             RemoveClipboardFormatListener(hwnd);
             UnregisterHotKey(hwnd, 1);
-            UnregisterHotKey(hwnd, 2);
             UnregisterHotKey(hwnd, 3);
             UnregisterHotKey(hwnd, 4);
             DestroyWindow(hwnd);
@@ -474,11 +569,63 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
 // Tauri commands to control the Global Reader
 #[tauri::command]
 pub fn get_auto_read_config() -> AutoReadConfig {
+    let sc = CURRENT_SHORTCUT.lock().unwrap().clone();
+    let current_sc = if sc.is_empty() { "Shift + Space".to_string() } else { sc };
     AutoReadConfig {
+        master_enabled: MASTER_SERVICE_ENABLED.load(Ordering::Relaxed),
         auto_read_selection: AUTO_READ_SELECTION.load(Ordering::Relaxed),
         auto_read_copy: AUTO_READ_COPY.load(Ordering::Relaxed),
+        activation_shortcut: current_sc,
         settle_delay_ms: SETTLE_DELAY_MS.load(Ordering::Relaxed),
         earcon_enabled: EARCON_ENABLED.load(Ordering::Relaxed),
+    }
+}
+
+#[tauri::command]
+pub fn set_master_enabled(enabled: bool) {
+    MASTER_SERVICE_ENABLED.store(enabled, Ordering::SeqCst);
+    #[cfg(target_os = "windows")]
+    {
+        let thread_id = WORKER_THREAD_ID.load(Ordering::Relaxed);
+        if thread_id != 0 {
+            unsafe {
+                win32::PostThreadMessageW(thread_id, win32::WM_USER_UPDATE_HOTKEY, 0, 0);
+            }
+        }
+    }
+}
+
+#[tauri::command]
+pub fn get_master_enabled() -> bool {
+    MASTER_SERVICE_ENABLED.load(Ordering::Relaxed)
+}
+
+#[tauri::command]
+pub fn set_activation_shortcut(shortcut: String) {
+    let clean = shortcut.trim().to_string();
+    if !clean.is_empty() {
+        if let Ok(mut lock) = CURRENT_SHORTCUT.lock() {
+            *lock = clean;
+        }
+        #[cfg(target_os = "windows")]
+        {
+            let thread_id = WORKER_THREAD_ID.load(Ordering::Relaxed);
+            if thread_id != 0 {
+                unsafe {
+                    win32::PostThreadMessageW(thread_id, win32::WM_USER_UPDATE_HOTKEY, 0, 0);
+                }
+            }
+        }
+    }
+}
+
+#[tauri::command]
+pub fn get_activation_shortcut() -> String {
+    let sc = CURRENT_SHORTCUT.lock().unwrap().clone();
+    if sc.is_empty() {
+        "Shift + Space".to_string()
+    } else {
+        sc
     }
 }
 

@@ -13,6 +13,7 @@ import {
   Trash2,
   Copy,
   Zap,
+  Power,
 } from 'lucide-react';
 import { listen, emit } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
@@ -26,8 +27,10 @@ export interface HudStatusPayload {
 }
 
 export interface AutoReadConfig {
+  master_enabled?: boolean;
   auto_read_selection: boolean;
   auto_read_copy: boolean;
+  activation_shortcut?: string;
   settle_delay_ms: number;
   earcon_enabled: boolean;
 }
@@ -305,8 +308,29 @@ export function App() {
   // Active Tab
   const [activeTab, setActiveTab] = useState<TabKey>('general');
 
+  // Master Switch State (turns entire Voxify quick reader service ON/OFF)
+  const [masterEnabled, setMasterEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('voxify_master_enabled');
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
+  });
+
+  // Activation Shortcut State
+  const [activationShortcut, setActivationShortcut] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('voxify_activation_shortcut');
+      return saved || 'Shift + Space';
+    } catch {
+      return 'Shift + Space';
+    }
+  });
+  const [isRecordingShortcut, setIsRecordingShortcut] = useState<boolean>(false);
+
   // Preferences State
-  const [autoReadSelection, setAutoReadSelection] = useState<boolean>(true);
+  const [autoReadSelection, setAutoReadSelection] = useState<boolean>(false);
   const [autoReadCopy, setAutoReadCopy] = useState<boolean>(false);
   const [earconEnabled, setEarconEnabled] = useState<boolean>(true);
   const [settleDelayMs, setSettleDelayMs] = useState<number>(10);
@@ -322,6 +346,50 @@ export function App() {
 
   const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
 
+  // Interactive Shortcut Recording Listener
+  useEffect(() => {
+    if (!isRecordingShortcut) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Skip bare modifier keypresses alone
+      if (['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) {
+        return;
+      }
+
+      const parts: string[] = [];
+      if (e.ctrlKey) parts.push('Ctrl');
+      if (e.altKey) parts.push('Alt');
+      if (e.shiftKey) parts.push('Shift');
+      if (e.metaKey) parts.push('Win');
+
+      let key = e.key;
+      if (key === ' ') key = 'Space';
+      else if (key.length === 1) key = key.toUpperCase();
+
+      parts.push(key);
+      const newShortcut = parts.join(' + ');
+
+      setActivationShortcut(newShortcut);
+      setIsRecordingShortcut(false);
+
+      try {
+        localStorage.setItem('voxify_activation_shortcut', newShortcut);
+      } catch {}
+
+      if (isTauri) {
+        invoke('set_activation_shortcut', { shortcut: newShortcut }).catch(() => {});
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, { capture: true });
+    };
+  }, [isRecordingShortcut, isTauri]);
+
   // Sync settings from Tauri backend & enforce Sarah + 1.0x speed
   useEffect(() => {
     if (isTauri) {
@@ -331,8 +399,10 @@ export function App() {
       invoke<AutoReadConfig>('get_auto_read_config')
         .then((config) => {
           if (config) {
+            if (config.master_enabled !== undefined) setMasterEnabled(config.master_enabled);
             setAutoReadSelection(config.auto_read_selection);
             setAutoReadCopy(config.auto_read_copy);
+            if (config.activation_shortcut) setActivationShortcut(config.activation_shortcut);
             setSettleDelayMs(config.settle_delay_ms);
             setEarconEnabled(config.earcon_enabled);
           }
@@ -364,6 +434,32 @@ export function App() {
       };
     }
   }, [isTauri]);
+
+  const handleToggleMaster = (enabled: boolean) => {
+    setMasterEnabled(enabled);
+    try {
+      localStorage.setItem('voxify_master_enabled', JSON.stringify(enabled));
+    } catch {}
+    if (isTauri) {
+      invoke('set_master_enabled', { enabled }).catch(() => {});
+      if (!enabled) {
+        invoke('hide_quick_reader').catch(() => {});
+        invoke('stop_speech').catch(() => {});
+      }
+    }
+  };
+
+  const handleResetShortcut = () => {
+    const defaultShortcut = 'Shift + Space';
+    setActivationShortcut(defaultShortcut);
+    setIsRecordingShortcut(false);
+    try {
+      localStorage.setItem('voxify_activation_shortcut', defaultShortcut);
+    } catch {}
+    if (isTauri) {
+      invoke('set_activation_shortcut', { shortcut: defaultShortcut }).catch(() => {});
+    }
+  };
 
   const handleToggleAutoReadSelection = (enabled: boolean) => {
     setAutoReadSelection(enabled);
@@ -492,13 +588,36 @@ export function App() {
         <aside className="w-52 bg-[#121214] border-r border-white/5 flex flex-col justify-between shrink-0 p-4">
           <div className="space-y-6">
             {/* App Logo: Burgundy Bubbly Font */}
-            <div className="pt-2 px-2 flex items-center gap-2.5">
+            <div className="pt-2 px-2 flex items-center justify-between">
               <div className="relative">
                 <span className="text-2xl font-black tracking-tight text-[#b31b54] font-sans drop-shadow-[0_2px_10px_rgba(113,0,48,0.55)]">
                   voxify
                 </span>
                 <span className="absolute -bottom-1 right-0 w-1.5 h-1.5 rounded-full bg-[#710030] ring-2 ring-[#121214]" />
               </div>
+            </div>
+
+            {/* Master Switch Sidebar Indicator */}
+            <div className="p-2.5 rounded-xl bg-[#18181b] border border-white/5 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full transition-all ${
+                    masterEnabled
+                      ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]'
+                      : 'bg-slate-600'
+                  }`} />
+                  <span className="text-[11px] font-semibold text-slate-200">
+                    {masterEnabled ? 'Service Active' : 'Service Paused'}
+                  </span>
+                </div>
+                <HandySwitch
+                  checked={masterEnabled}
+                  onChange={handleToggleMaster}
+                />
+              </div>
+              <p className="text-[10px] text-slate-400 leading-tight">
+                {masterEnabled ? `${activationShortcut} to summon` : 'Turned off'}
+              </p>
             </div>
 
             {/* Navigation Tabs in Burgundy */}
@@ -574,6 +693,46 @@ export function App() {
           {/* TAB 1: GENERAL */}
           {activeTab === 'general' && (
             <div className="max-w-2xl space-y-7 animate-in fade-in duration-150">
+              {/* MASTER SERVICE HERO BANNER */}
+              <div className={`p-4 rounded-2xl border transition-all shadow-lg ${
+                masterEnabled
+                  ? 'bg-gradient-to-r from-[#202024] via-[#26101c] to-[#1c0812] border-[#710030]/50 shadow-black/40'
+                  : 'bg-[#202024] border-white/5'
+              }`}>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all shrink-0 ${
+                      masterEnabled
+                        ? 'bg-[#710030]/35 border-[#b31b54]/50 text-[#f075a4] shadow-[0_0_15px_rgba(113,0,48,0.45)]'
+                        : 'bg-white/5 border-white/10 text-slate-500'
+                    }`}>
+                      <Power className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-sm font-bold text-white tracking-wide">Master Service Switch</h2>
+                        <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${
+                          masterEnabled
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-[0_0_8px_rgba(16,185,129,0.25)]'
+                            : 'bg-white/5 text-slate-400 border border-white/10'
+                        }`}>
+                          {masterEnabled ? 'ACTIVE' : 'OFF'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {masterEnabled
+                          ? 'Highlight text anywhere in Windows and press your shortcut to summon the audio pill.'
+                          : 'Service is turned off. Global shortcuts and floating audio pill will not trigger.'}
+                      </p>
+                    </div>
+                  </div>
+                  <HandySwitch
+                    checked={masterEnabled}
+                    onChange={handleToggleMaster}
+                  />
+                </div>
+              </div>
+
               {/* SECTION: GENERAL / SHORTCUTS */}
               <div className="space-y-3">
                 <h3 className="text-[11px] font-bold tracking-wider text-slate-500 uppercase px-1">
@@ -587,16 +746,24 @@ export function App() {
                       <span className="text-sm font-medium text-slate-200">
                         Read Selection Shortcut
                       </span>
-                      <InfoTooltip text="Global hotkey to capture and read highlighted text anywhere in Windows." />
+                      <InfoTooltip text="Global hotkey to capture highlighted text and summon the floating audio pill." />
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="px-3 py-1 bg-[#151517] border border-white/10 rounded-lg text-xs font-mono font-medium text-slate-200">
-                        Win + Alt + S
-                      </div>
                       <button
-                        title="Reset hotkey"
-                        onClick={handleTestAudioPill}
-                        className="p-1 text-slate-500 hover:text-slate-300 transition-colors"
+                        onClick={() => setIsRecordingShortcut(true)}
+                        className={`px-3 py-1 bg-[#151517] rounded-lg text-xs font-mono font-medium transition-all ${
+                          isRecordingShortcut
+                            ? 'border border-[#d82d6f] text-[#f075a4] shadow-[0_0_10px_rgba(216,45,111,0.5)] animate-pulse'
+                            : 'border border-white/10 text-slate-200 hover:border-[#b31b54]/50 hover:text-white'
+                        }`}
+                        title="Click to record new shortcut"
+                      >
+                        {isRecordingShortcut ? 'Press new keys...' : activationShortcut}
+                      </button>
+                      <button
+                        title="Reset hotkey to default (Shift + Space)"
+                        onClick={handleResetShortcut}
+                        className="p-1 text-slate-500 hover:text-slate-300 transition-colors active:scale-95"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                       </button>

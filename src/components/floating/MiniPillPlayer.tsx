@@ -95,7 +95,7 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
     // Reset to compact on every new text selection
     setPhase('compact');
 
-    const STAGE1_DURATION = 1100; // 1.1s tactile glance window for droplet descent & word count
+    const STAGE1_DURATION = 2100; // 2.1s (+1.0s extended) comfortable glance window for droplet descent & word count
 
     const stage1Timer = setTimeout(() => {
       if (isSafeRef.current) {

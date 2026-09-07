@@ -6,11 +6,15 @@
 
 @layer base {
   :root {
-    --bg-primary: #0b0f19;
-    --bg-secondary: #121829;
-    --bg-card: #182036;
+    --bg-primary: #18181b;
+    --bg-secondary: #121214;
+    --bg-card: #202024;
     --border-subtle: rgba(255, 255, 255, 0.08);
-    --border-accent: rgba(99, 102, 241, 0.3);
+    --border-accent: rgba(113, 0, 48, 0.4);
+    --burgundy-base: #710030;
+    --burgundy-mid: #8b0a3e;
+    --burgundy-bright: #b31b54;
+    --burgundy-light: #e05589;
   }
 
   body {
@@ -44,16 +48,16 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(18, 18, 20, 0.6);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(99, 102, 241, 0.3);
+  background: rgba(113, 0, 48, 0.45);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.6);
+  background: rgba(179, 27, 84, 0.75);
 }
 
 /* High-performance solid dark theme panels (Zero GPU compositor blur overhead) */
@@ -189,8 +193,8 @@
   width: 50px;
   height: 50px;
   border-radius: 9999px;
-  border: 1.5px solid rgba(129, 140, 248, 0.45);
-  box-shadow: 0 0 14px rgba(99, 102, 241, 0.4);
+  border: 1.5px solid rgba(179, 27, 84, 0.55);
+  box-shadow: 0 0 16px rgba(113, 0, 48, 0.55);
   animation: waterDropRipple 0.55s cubic-bezier(0.1, 0.8, 0.3, 1) 0.36s both;
   will-change: transform, opacity;
   transform: translateZ(0);

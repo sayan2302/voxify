@@ -464,8 +464,7 @@ pub fn handle_new_selection(app_handle: &AppHandle, text: String) {
     let speed = crate::native_kokoro::get_current_speed();
     let word_count = text.split_whitespace().count();
 
-    // 2. Dynamic Island summon: Reveal HUD at Top-Center immediately
-    crate::show_or_focus_hud(app_handle);
+    // 2. Dynamic Island summon: Emit event first so WebView renders fresh staging state
     let _ = app_handle.emit("global-hud-status", serde_json::json!({
         "status": "staging",
         "text": text,
@@ -474,6 +473,7 @@ pub fn handle_new_selection(app_handle: &AppHandle, text: String) {
         "wordCount": word_count,
     }));
     let _ = app_handle.emit("global-selection-text", text.clone());
+    crate::show_or_focus_hud(app_handle);
 
     // 3. Start deep multi-chunk pre-buffering immediately in background
     crate::native_kokoro::prebuffer_first_chunk(&text, &voice_name, speed);

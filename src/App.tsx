@@ -254,8 +254,12 @@ function MiniPillStandalone() {
           if (isTauri) {
             invoke('hide_quick_reader').catch(() => {});
           }
-          setHudStatus(prev => ({ ...prev, status: 'idle' }));
+          setHudStatus({ status: 'idle', text: '', voiceName: FIXED_VOICE, speed: FIXED_SPEED });
           setPillPhase('compact');
+          setIsPrebufferReady(false);
+          setIsRunwaySafe(false);
+          setBufferedChunks(0);
+          setTotalChunks(0);
         }, 12000);
       }
     } else if (hudStatus.status === 'finished') {
@@ -263,8 +267,12 @@ function MiniPillStandalone() {
         if (isTauri) {
           invoke('hide_quick_reader').catch(() => {});
         }
-        setHudStatus(prev => ({ ...prev, status: 'idle' }));
+        setHudStatus({ status: 'idle', text: '', voiceName: FIXED_VOICE, speed: FIXED_SPEED });
         setPillPhase('compact');
+        setIsPrebufferReady(false);
+        setIsRunwaySafe(false);
+        setBufferedChunks(0);
+        setTotalChunks(0);
       }, 2500);
     }
 
@@ -280,7 +288,12 @@ function MiniPillStandalone() {
       invoke('stop_speech').catch(() => {});
       invoke('stop_kokoro_native').catch(() => {});
     }
-    setHudStatus(prev => ({ ...prev, status: 'idle' }));
+    setHudStatus({ status: 'idle', text: '', voiceName: FIXED_VOICE, speed: FIXED_SPEED });
+    setPillPhase('compact');
+    setIsPrebufferReady(false);
+    setIsRunwaySafe(false);
+    setBufferedChunks(0);
+    setTotalChunks(0);
   };
 
   const handleTogglePlay = () => {
@@ -306,8 +319,17 @@ function MiniPillStandalone() {
       invoke('stop_speech').catch(() => {});
       invoke('hide_quick_reader').catch(() => {});
     }
-    setHudStatus(prev => ({ ...prev, status: 'idle' }));
+    setHudStatus({ status: 'idle', text: '', voiceName: FIXED_VOICE, speed: FIXED_SPEED });
+    setPillPhase('compact');
+    setIsPrebufferReady(false);
+    setIsRunwaySafe(false);
+    setBufferedChunks(0);
+    setTotalChunks(0);
   };
+
+  if (hudStatus.status === 'idle' || !hudStatus.text) {
+    return null;
+  }
 
   return (
     <div className="w-full h-full flex items-center justify-center bg-transparent select-none m-0 p-0">

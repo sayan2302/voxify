@@ -87,6 +87,11 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
   // - If still synthesizing -> Expands into Stage 2 ("Almost ready..." with animated equalizer)
   // - The moment runway becomes safe in Stage 2 -> Immediately blossoms into [ ▶ Play ]!
   useEffect(() => {
+    if (!currentText || status === 'idle') {
+      setPhase('compact');
+      return;
+    }
+
     if (isSpeaking) {
       setPhase('controls');
       return;
@@ -110,11 +115,12 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
     return () => {
       clearTimeout(stage1Timer);
     };
-  }, [currentText, isSpeaking]);
+  }, [currentText, isSpeaking, status]);
 
   // Synchronized Bloom into Controls:
   // The moment runway becomes safe while in 'expanding' (Stage 2), bloom into controls!
   useEffect(() => {
+    if (!currentText || status === 'idle') return;
     if (isSpeaking) {
       setPhase('controls');
       return;
@@ -122,12 +128,16 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
     if (phase === 'expanding' && isSafe) {
       setPhase('controls');
     }
-  }, [isSafe, phase, isSpeaking]);
+  }, [isSafe, phase, isSpeaking, currentText, status]);
 
   // Hover: never skip or force controls prematurely during Stage 1 or Stage 2
   const handleMouseEnter = () => {
     onMouseEnter?.();
   };
+
+  if (!currentText || status === 'idle') {
+    return null;
+  }
 
   return (
     <div key={dropKey} className="relative flex flex-col items-center">

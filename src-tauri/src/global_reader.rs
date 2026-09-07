@@ -194,6 +194,8 @@ mod win32 {
         pub fn UnregisterHotKey(hWnd: HWND, id: i32) -> BOOL;
         pub fn AddClipboardFormatListener(hwnd: HWND) -> BOOL;
         pub fn RemoveClipboardFormatListener(hwnd: HWND) -> BOOL;
+        pub fn RegisterWindowMessageW(lpString: *const u16) -> u32;
+        pub fn GetClipboardSequenceNumber() -> u32;
         pub fn OpenClipboard(hWndNewOwner: HWND) -> BOOL;
         pub fn CloseClipboard() -> BOOL;
         pub fn GetClipboardData(uFormat: u32) -> HANDLE;
@@ -657,9 +659,23 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
             // Listen to clipboard updates
             AddClipboardFormatListener(hwnd);
 
+            // Register single-instance wake message
+            let wake_msg_name: Vec<u16> = "VOXIFY_WAKE_INSTANCE_MSG\0".encode_utf16().collect();
+            let wake_msg = RegisterWindowMessageW(wake_msg_name.as_ptr());
+
             let mut msg: MSG = std::mem::zeroed();
 
             while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 {
+                if wake_msg != 0 && msg.message == wake_msg {
+                    println!("[GlobalReader] Received wake message from secondary instance. Restoring main window.");
+                    if let Some(main_win) = app_handle.get_webview_window("main") {
+                        let _ = main_win.show();
+                        let _ = main_win.unminimize();
+                        let _ = main_win.set_focus();
+                    }
+                    continue;
+                }
+
                 if msg.message == WM_USER_UPDATE_HOTKEY {
                     UnregisterHotKey(hwnd, 1);
                     if MASTER_SERVICE_ENABLED.load(Ordering::Relaxed) {
@@ -711,12 +727,38 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
                         continue;
                     }
 
-                    // 1. Simulate copy keystrokes to capture whatever text is highlighted in the active window
+                    // 1. Check clipboard sequence number before simulating copy
+                    let seq_before = GetClipboardSequenceNumber();
                     simulate_copy_keystrokes();
                     Sleep(30);
                     IS_SIMULATING_COPY.store(false, Ordering::SeqCst);
+                    let seq_after = GetClipboardSequenceNumber();
 
                     let is_currently_speaking = crate::native_kokoro::is_speaking();
+
+                    // If clipboard sequence didn't change, copy keystroke didn't register (e.g. elevated admin window or no selection)
+                    if seq_after == seq_before {
+                        let current_opt = {
+                            let guard = CURRENT_SELECTION_TEXT.lock().unwrap();
+                            guard.clone()
+                        };
+                        if let Some(_staged) = current_opt {
+                            if is_currently_speaking {
+                                println!("[GlobalReader] Shortcut pressed without new selection while speaking -> stopping");
+                                stop_all_speech(&app_handle);
+                            } else {
+                                println!("[GlobalReader] Shortcut pressed with existing staged selection -> toggling play");
+                                play_current_selection(&app_handle);
+                            }
+                        } else if is_currently_speaking {
+                            println!("[GlobalReader] Shortcut pressed with no selection while speaking -> stopping");
+                            stop_all_speech(&app_handle);
+                        } else {
+                            println!("[GlobalReader] No text selection detected or active window blocked copy keystrokes (elevated window).");
+                        }
+                        continue;
+                    }
+
                     let copied_text = read_clipboard_text();
 
                     if let Some(text) = copied_text {

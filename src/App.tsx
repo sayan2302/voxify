@@ -428,6 +428,14 @@ export function App() {
       return 10;
     }
   });
+  const [autostartEnabled, setAutostartEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('voxify_autostart_enabled');
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
+  });
   const [auditioningSarah, setAuditioningSarah] = useState<boolean>(false);
   const [history, setHistory] = useState<HistoryItem[]>(() => {
     try {
@@ -527,6 +535,14 @@ export function App() {
               try { localStorage.setItem('voxify_earcon_enabled', JSON.stringify(config.earcon_enabled)); } catch {}
             }
           }
+        })
+        .catch(() => {});
+
+      // Query native Windows autostart registry status
+      invoke<boolean>('get_autostart_enabled')
+        .then((enabled) => {
+          setAutostartEnabled(enabled);
+          try { localStorage.setItem('voxify_autostart_enabled', JSON.stringify(enabled)); } catch {}
         })
         .catch(() => {});
 
@@ -668,6 +684,18 @@ export function App() {
     } catch {}
     if (isTauri) {
       invoke('set_settle_delay_ms', { delayMs }).catch(() => {});
+    }
+  };
+
+  const handleToggleAutostart = (enabled: boolean) => {
+    setAutostartEnabled(enabled);
+    try {
+      localStorage.setItem('voxify_autostart_enabled', JSON.stringify(enabled));
+    } catch {}
+    if (isTauri) {
+      invoke('set_autostart_enabled', { enabled }).catch((err) => {
+        console.error('Failed to set autostart in Windows registry:', err);
+      });
     }
   };
 
@@ -1000,6 +1028,20 @@ export function App() {
                     <HandySwitch
                       checked={autoCopySelection}
                       onChange={handleToggleAutoCopySelection}
+                    />
+                  </div>
+
+                  {/* Row: Launch on Windows Startup */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-[#2563eb]/30 transition-colors">
+                    <div className="flex items-center">
+                      <span className="text-sm font-medium text-slate-200">
+                        Launch on Windows Startup
+                      </span>
+                      <InfoTooltip text="Automatically launches Voxify in the background system tray whenever your computer boots up." />
+                    </div>
+                    <HandySwitch
+                      checked={autostartEnabled}
+                      onChange={handleToggleAutostart}
                     />
                   </div>
                 </div>

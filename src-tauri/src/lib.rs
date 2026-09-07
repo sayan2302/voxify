@@ -1,3 +1,5 @@
+pub mod autostart;
+pub mod single_instance;
 mod global_reader;
 pub mod native_tts;
 pub mod native_kokoro;
@@ -35,17 +37,61 @@ pub fn remove_window_border(window: &tauri::WebviewWindow) {
     }
 }
 
+#[cfg(target_os = "windows")]
+pub fn get_active_cursor_monitor(app: &tauri::AppHandle) -> Option<tauri::Monitor> {
+    #[repr(C)]
+    struct POINT {
+        x: i32,
+        y: i32,
+    }
+    extern "system" {
+        fn GetCursorPos(lpPoint: *mut POINT) -> i32;
+    }
+    let mut pt = POINT { x: 0, y: 0 };
+    if unsafe { GetCursorPos(&mut pt) } != 0 {
+        if let Ok(monitors) = app.available_monitors() {
+            for monitor in monitors {
+                let pos = monitor.position();
+                let size = monitor.size();
+                if pt.x >= pos.x
+                    && pt.x < pos.x + size.width as i32
+                    && pt.y >= pos.y
+                    && pt.y < pos.y + size.height as i32
+                {
+                    return Some(monitor);
+                }
+            }
+        }
+    }
+    app.primary_monitor().ok().flatten()
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn get_active_cursor_monitor(app: &tauri::AppHandle) -> Option<tauri::Monitor> {
+    app.primary_monitor().ok().flatten()
+}
+
+pub fn calculate_pill_position(monitor: &tauri::Monitor) -> (f64, f64) {
+    let size = monitor.size();
+    let scale = monitor.scale_factor();
+    let pos = monitor.position();
+    let mon_x_logical = pos.x as f64 / scale;
+    let mon_y_logical = pos.y as f64 / scale;
+    let screen_w_logical = size.width as f64 / scale;
+    let x = mon_x_logical + (screen_w_logical - 300.0) / 2.0;
+    let y = mon_y_logical;
+    (x, y)
+}
+
 pub fn show_or_focus_hud(app: &tauri::AppHandle) {
+    let target_monitor = get_active_cursor_monitor(app);
     if let Some(pill_window) = app.get_webview_window("mini-pill") {
         #[cfg(target_os = "windows")]
         remove_window_border(&pill_window);
-        if let Ok(Some(monitor)) = app.primary_monitor() {
-            let size = monitor.size();
-            let scale = monitor.scale_factor();
-            let screen_w = size.width as f64 / scale;
-            let x = (screen_w - 300.0) / 2.0;
+        if let Some(mon) = &target_monitor {
+            let (x, y) = calculate_pill_position(mon);
             let _ = pill_window.set_size(tauri::LogicalSize::new(300.0, 100.0));
-            let _ = pill_window.set_position(tauri::LogicalPosition::new(x, 0.0));
+            let _ = pill_window.set_position(tauri::LogicalPosition::new(x, y));
         }
         let _ = pill_window.show();
         let _ = pill_window.unminimize();
@@ -65,12 +111,9 @@ pub fn show_or_focus_hud(app: &tauri::AppHandle) {
         .always_on_top(true)
         .skip_taskbar(true);
 
-        if let Ok(Some(monitor)) = app.primary_monitor() {
-            let size = monitor.size();
-            let scale = monitor.scale_factor();
-            let screen_w = size.width as f64 / scale;
-            let x = (screen_w - 300.0) / 2.0;
-            builder = builder.position(x, 0.0);
+        if let Some(mon) = &target_monitor {
+            let (x, y) = calculate_pill_position(mon);
+            builder = builder.position(x, y);
         } else {
             builder = builder.center();
         }
@@ -247,10 +290,20 @@ pub fn run() {
             global_reader::play_selection,
             global_reader::pause_speech,
             global_reader::trigger_read_selection,
-            global_reader::stop_speech
+            global_reader::stop_speech,
+            autostart::get_autostart_enabled,
+            autostart::set_autostart_enabled
         ])
         .setup(|app| {
-            // Pre-create mini-pill overlay window hidden for 0ms instant display at Top-Center
+            // Check if launched silently via Windows startup or minimized flag
+            let is_silent_start = std::env::args().any(|arg| arg == "--autostart" || arg == "--minimized" || arg == "--tray");
+            if is_silent_start {
+                if let Some(main_win) = app.get_webview_window("main") {
+                    let _ = main_win.hide();
+                }
+            }
+
+            // Pre-create mini-pill overlay window hidden for 0ms instant display at Top-Center of active monitor
             let mut pill_builder = tauri::WebviewWindowBuilder::new(
                 app,
                 "mini-pill",
@@ -266,12 +319,9 @@ pub fn run() {
             .skip_taskbar(true)
             .visible(false);
 
-            if let Ok(Some(monitor)) = app.primary_monitor() {
-                let size = monitor.size();
-                let scale = monitor.scale_factor();
-                let screen_w = size.width as f64 / scale;
-                let x = (screen_w - 300.0) / 2.0;
-                pill_builder = pill_builder.position(x, 0.0);
+            if let Some(mon) = get_active_cursor_monitor(app.handle()) {
+                let (x, y) = calculate_pill_position(&mon);
+                pill_builder = pill_builder.position(x, y);
             } else {
                 pill_builder = pill_builder.center();
             }

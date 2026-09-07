@@ -322,9 +322,12 @@ export function App() {
   const [activationShortcut, setActivationShortcut] = useState<string>(() => {
     try {
       const saved = localStorage.getItem('voxify_activation_shortcut');
-      return saved || 'Shift + Space';
+      if (!saved || saved === 'Shift + Space') {
+        return 'Win + Space';
+      }
+      return saved;
     } catch {
-      return 'Shift + Space';
+      return 'Win + Space';
     }
   });
   const [isRecordingShortcut, setIsRecordingShortcut] = useState<boolean>(false);
@@ -360,10 +363,10 @@ export function App() {
       }
 
       const parts: string[] = [];
+      if (e.metaKey) parts.push('Win');
       if (e.ctrlKey) parts.push('Ctrl');
       if (e.altKey) parts.push('Alt');
       if (e.shiftKey) parts.push('Shift');
-      if (e.metaKey) parts.push('Win');
 
       let key = e.key;
       if (key === ' ') key = 'Space';
@@ -450,7 +453,7 @@ export function App() {
   };
 
   const handleResetShortcut = () => {
-    const defaultShortcut = 'Shift + Space';
+    const defaultShortcut = 'Win + Space';
     setActivationShortcut(defaultShortcut);
     setIsRecordingShortcut(false);
     try {
@@ -761,7 +764,7 @@ export function App() {
                         {isRecordingShortcut ? 'Press new keys...' : activationShortcut}
                       </button>
                       <button
-                        title="Reset hotkey to default (Shift + Space)"
+                        title="Reset hotkey to default (Win + Space)"
                         onClick={handleResetShortcut}
                         className="p-1 text-slate-500 hover:text-slate-300 transition-colors active:scale-95"
                       >
@@ -934,7 +937,7 @@ export function App() {
                   <History className="w-8 h-8 text-slate-600 mx-auto" />
                   <p className="text-sm font-medium text-slate-400">No recent clippings captured</p>
                   <p className="text-xs text-slate-500">
-                    Highlight any text in any app, or press <code className="text-slate-300">Win + Alt + S</code> to start listening.
+                    Highlight any text in any app, or press <code className="text-slate-300 font-mono text-[11px] px-1 py-0.5 rounded bg-white/5 border border-white/10">{activationShortcut}</code> to summon the audio pill.
                   </p>
                 </div>
               ) : (

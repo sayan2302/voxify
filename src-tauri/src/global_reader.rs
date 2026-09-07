@@ -11,6 +11,8 @@ pub static EARCON_ENABLED: AtomicBool = AtomicBool::new(true);
 static IS_SIMULATING_COPY: AtomicBool = AtomicBool::new(false);
 static WORKER_THREAD_ID: AtomicU32 = AtomicU32::new(0);
 static CURRENT_SHORTCUT: Mutex<String> = Mutex::new(String::new());
+static ACTIVE_SHORTCUT_MODS: AtomicU32 = AtomicU32::new(0x4008); // MOD_WIN (0x0008) | MOD_NOREPEAT (0x4000)
+static ACTIVE_SHORTCUT_VK: AtomicU32 = AtomicU32::new(0x20); // VK_SPACE
 
 // Keep track of the last read text to avoid duplicate loops
 static LAST_READ_TEXT: Mutex<Option<String>> = Mutex::new(None);
@@ -43,13 +45,17 @@ mod win32 {
     pub type LRESULT = isize;
     pub type ATOM = u16;
 
+    pub const WH_KEYBOARD_LL: i32 = 13;
     pub const WH_MOUSE_LL: i32 = 14;
+    pub const WM_KEYDOWN: u32 = 0x0100;
+    pub const WM_SYSKEYDOWN: u32 = 0x0104;
     pub const WM_LBUTTONDOWN: u32 = 0x0201;
     pub const WM_LBUTTONUP: u32 = 0x0202;
     pub const WM_HOTKEY: u32 = 0x0312;
     pub const WM_CLIPBOARDUPDATE: u32 = 0x031D;
     pub const WM_USER_SELECTION_ACTION: u32 = 0x0400 + 101;
     pub const WM_USER_UPDATE_HOTKEY: u32 = 0x0400 + 102;
+    pub const WM_USER_ACTIVATION_SHORTCUT: u32 = 0x0400 + 103;
     pub const CF_UNICODETEXT: u32 = 13;
 
     pub const MOD_ALT: u32 = 0x0001;
@@ -58,10 +64,24 @@ mod win32 {
     pub const MOD_WIN: u32 = 0x0008;
     pub const MOD_NOREPEAT: u32 = 0x4000;
 
-    pub const VK_SPACE: u8 = 0x20;
+    pub const VK_SHIFT: u8 = 0x10;
     pub const VK_CONTROL: u8 = 0x11;
+    pub const VK_MENU: u8 = 0x12; // Alt key
+    pub const VK_SPACE: u8 = 0x20;
     pub const VK_C: u8 = 0x43;
+    pub const VK_LWIN: u8 = 0x5B;
+    pub const VK_RWIN: u8 = 0x5C;
     pub const KEYEVENTF_KEYUP: u32 = 0x0002;
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    pub struct KBDLLHOOKSTRUCT {
+        pub vk_code: u32,
+        pub scan_code: u32,
+        pub flags: u32,
+        pub time: u32,
+        pub dw_extra_info: usize,
+    }
 
     #[repr(C)]
     #[derive(Clone, Copy, Default)]
@@ -124,6 +144,7 @@ mod win32 {
         pub fn GetCurrentThreadId() -> u32;
         pub fn Sleep(dwMilliseconds: u32);
         pub fn keybd_event(bVk: u8, bScan: u8, dwFlags: u32, dwExtraInfo: usize);
+        pub fn GetAsyncKeyState(vKey: i32) -> i16;
         pub fn RegisterClassW(lpWndClass: *const WNDCLASSW) -> ATOM;
         pub fn CreateWindowExW(
             dwExStyle: u32,
@@ -180,6 +201,44 @@ mod win32 {
         CallNextHookEx(null_mut(), n_code, w_param, l_param)
     }
 
+    pub unsafe extern "system" fn keyboard_hook_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
+        if n_code >= 0 && MASTER_SERVICE_ENABLED.load(Ordering::Relaxed) {
+            let msg = w_param as u32;
+            if msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN {
+                let hook_struct = *(l_param as *const KBDLLHOOKSTRUCT);
+                let mods = ACTIVE_SHORTCUT_MODS.load(Ordering::Relaxed);
+                let req_vk = ACTIVE_SHORTCUT_VK.load(Ordering::Relaxed);
+
+                let req_win = (mods & MOD_WIN) != 0;
+                if req_win && hook_struct.vk_code == req_vk {
+                    let win_down = (GetAsyncKeyState(VK_LWIN as i32) as u16 & 0x8000 != 0)
+                        || (GetAsyncKeyState(VK_RWIN as i32) as u16 & 0x8000 != 0);
+                    let ctrl_down = GetAsyncKeyState(VK_CONTROL as i32) as u16 & 0x8000 != 0;
+                    let shift_down = GetAsyncKeyState(VK_SHIFT as i32) as u16 & 0x8000 != 0;
+                    let alt_down = GetAsyncKeyState(VK_MENU as i32) as u16 & 0x8000 != 0;
+
+                    let req_ctrl = (mods & MOD_CONTROL) != 0;
+                    let req_shift = (mods & MOD_SHIFT) != 0;
+                    let req_alt = (mods & MOD_ALT) != 0;
+
+                    if win_down && (ctrl_down == req_ctrl) && (shift_down == req_shift) && (alt_down == req_alt) {
+                        // Mask the Windows key with dummy unassigned key 0xE8 so releasing Win does not pop open the Start menu
+                        keybd_event(0xE8, 0, 0, 0);
+                        keybd_event(0xE8, 0, KEYEVENTF_KEYUP, 0);
+
+                        let thread_id = WORKER_THREAD_ID.load(Ordering::Relaxed);
+                        if thread_id != 0 {
+                            PostThreadMessageW(thread_id, WM_USER_ACTIVATION_SHORTCUT, 0, 0);
+                        }
+                        // Return 1 to consume the key: Windows language switcher or default shell actions will NOT trigger!
+                        return 1;
+                    }
+                }
+            }
+        }
+        CallNextHookEx(null_mut(), n_code, w_param, l_param)
+    }
+
     pub unsafe extern "system" fn dummy_wnd_proc(hwnd: HWND, msg: u32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
         DefWindowProcW(hwnd, msg, w_param, l_param)
     }
@@ -187,6 +246,29 @@ mod win32 {
     pub fn simulate_copy_keystrokes() {
         unsafe {
             IS_SIMULATING_COPY.store(true, Ordering::SeqCst);
+
+            // If Windows key, Alt, or Shift is held down by the user,
+            // release them before sending Ctrl+C so the target application receives pure Ctrl+C
+            let lwin_down = (GetAsyncKeyState(VK_LWIN as i32) as u16 & 0x8000) != 0;
+            let rwin_down = (GetAsyncKeyState(VK_RWIN as i32) as u16 & 0x8000) != 0;
+            let alt_down = (GetAsyncKeyState(VK_MENU as i32) as u16 & 0x8000) != 0;
+            let shift_down = (GetAsyncKeyState(VK_SHIFT as i32) as u16 & 0x8000) != 0;
+
+            if lwin_down {
+                keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, 0);
+            }
+            if rwin_down {
+                keybd_event(VK_RWIN, 0, KEYEVENTF_KEYUP, 0);
+            }
+            if alt_down {
+                keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0);
+            }
+            if shift_down {
+                keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, 0);
+            }
+
+            Sleep(10);
+
             // Press Ctrl
             keybd_event(VK_CONTROL, 0, 0, 0);
             // Press C
@@ -434,17 +516,30 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
                 eprintln!("Failed to install low-level mouse hook for Voxify global reader");
             }
 
+            // Install low-level keyboard hook (captures Win + Space and custom Win shortcuts without Windows shell interference)
+            let kbd_hook = SetWindowsHookExW(WH_KEYBOARD_LL, keyboard_hook_proc, null_mut(), 0);
+            if kbd_hook.is_null() {
+                eprintln!("Failed to install low-level keyboard hook for Voxify global reader");
+            }
+
             // Register global hotkeys
-            // ID 1: Configurable Activation Shortcut (default: Shift + Space)
+            // ID 1: Configurable Activation Shortcut (default: Win + Space)
             let (init_mods, init_vk) = {
                 let mut current = CURRENT_SHORTCUT.lock().unwrap();
                 if current.is_empty() {
-                    *current = "Shift + Space".to_string();
+                    *current = "Win + Space".to_string();
                 }
-                parse_shortcut_string(&current).unwrap_or((MOD_SHIFT | MOD_NOREPEAT, VK_SPACE as u32))
+                let parsed = parse_shortcut_string(&current).unwrap_or((MOD_WIN | MOD_NOREPEAT, VK_SPACE as u32));
+                ACTIVE_SHORTCUT_MODS.store(parsed.0, Ordering::Relaxed);
+                ACTIVE_SHORTCUT_VK.store(parsed.1, Ordering::Relaxed);
+                parsed
             };
-            let reg_ok = RegisterHotKey(hwnd, 1, init_mods, init_vk);
-            println!("[GlobalReader] Registered activation shortcut 'Shift + Space' (success: {})", reg_ok != 0);
+            if (init_mods & MOD_WIN) == 0 {
+                let reg_ok = RegisterHotKey(hwnd, 1, init_mods, init_vk);
+                println!("[GlobalReader] Registered activation shortcut '{}' (success: {})", *CURRENT_SHORTCUT.lock().unwrap(), reg_ok != 0);
+            } else {
+                println!("[GlobalReader] Activation shortcut uses Win key ('{}'), handled via WH_KEYBOARD_LL hook", *CURRENT_SHORTCUT.lock().unwrap());
+            }
 
             // ID 3: Win + Alt + X (Stop Speech)
             RegisterHotKey(hwnd, 3, MOD_WIN | MOD_ALT | MOD_NOREPEAT, 0x58);
@@ -462,8 +557,14 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
                     if MASTER_SERVICE_ENABLED.load(Ordering::Relaxed) {
                         let sc = CURRENT_SHORTCUT.lock().unwrap().clone();
                         if let Some((mods, vk)) = parse_shortcut_string(&sc) {
-                            let ok = RegisterHotKey(hwnd, 1, mods, vk);
-                            println!("[GlobalReader] Re-registered activation shortcut '{}' (mods: 0x{:X}, vk: 0x{:X}, success: {})", sc, mods, vk, ok != 0);
+                            ACTIVE_SHORTCUT_MODS.store(mods, Ordering::Relaxed);
+                            ACTIVE_SHORTCUT_VK.store(vk, Ordering::Relaxed);
+                            if (mods & MOD_WIN) == 0 {
+                                let ok = RegisterHotKey(hwnd, 1, mods, vk);
+                                println!("[GlobalReader] Re-registered activation shortcut '{}' (mods: 0x{:X}, vk: 0x{:X}, success: {})", sc, mods, vk, ok != 0);
+                            } else {
+                                println!("[GlobalReader] Configured Win shortcut '{}', active via WH_KEYBOARD_LL hook", sc);
+                            }
                         }
                     } else {
                         println!("[GlobalReader] Master switch is OFF: activation shortcut unregistered");
@@ -488,49 +589,49 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
                             handle_new_selection(&app_handle, text);
                         }
                     }
-                } else if msg.message == WM_HOTKEY {
-                    let hotkey_id = msg.w_param as i32;
-                    if hotkey_id == 1 {
-                        if !MASTER_SERVICE_ENABLED.load(Ordering::Relaxed) {
-                            continue;
-                        }
+                } else if msg.message == WM_USER_ACTIVATION_SHORTCUT || (msg.message == WM_HOTKEY && msg.w_param == 1) {
+                    if !MASTER_SERVICE_ENABLED.load(Ordering::Relaxed) {
+                        continue;
+                    }
 
-                        // If already speaking, pressing activation shortcut stops/pauses playback
-                        if crate::native_kokoro::is_speaking() {
-                            stop_all_speech(&app_handle);
-                            continue;
-                        }
+                    // If already speaking, pressing activation shortcut stops/pauses playback
+                    if crate::native_kokoro::is_speaking() {
+                        stop_all_speech(&app_handle);
+                        continue;
+                    }
 
-                        // User pressed Activation Shortcut (e.g. Shift + Space)
-                        // Capture currently highlighted text
-                        simulate_copy_keystrokes();
-                        Sleep(30);
-                        IS_SIMULATING_COPY.store(false, Ordering::SeqCst);
+                    // User pressed Activation Shortcut (e.g. Win + Space)
+                    // Capture currently highlighted text
+                    simulate_copy_keystrokes();
+                    Sleep(30);
+                    IS_SIMULATING_COPY.store(false, Ordering::SeqCst);
 
-                        if let Some(text) = read_clipboard_text() {
-                            if text.len() >= 2 {
-                                let is_same_text = {
-                                    let current = CURRENT_SELECTION_TEXT.lock().unwrap();
-                                    current.as_ref().map(|c| c == &text).unwrap_or(false)
-                                };
+                    if let Some(text) = read_clipboard_text() {
+                        if text.len() >= 2 {
+                            let is_same_text = {
+                                let current = CURRENT_SELECTION_TEXT.lock().unwrap();
+                                current.as_ref().map(|c| c == &text).unwrap_or(false)
+                            };
 
-                                let is_safe = crate::native_kokoro::is_active_session_runway_safe(
-                                    &text,
-                                    &crate::native_kokoro::get_current_voice_name(),
-                                    crate::native_kokoro::get_current_speed(),
-                                );
+                            let is_safe = crate::native_kokoro::is_active_session_runway_safe(
+                                &text,
+                                &crate::native_kokoro::get_current_voice_name(),
+                                crate::native_kokoro::get_current_speed(),
+                            );
 
-                                if is_same_text && is_safe {
-                                    play_current_selection(&app_handle);
-                                } else {
-                                    if let Ok(mut last) = LAST_READ_TEXT.lock() {
-                                        *last = Some(text.clone());
-                                    }
-                                    handle_new_selection(&app_handle, text);
+                            if is_same_text && is_safe {
+                                play_current_selection(&app_handle);
+                            } else {
+                                if let Ok(mut last) = LAST_READ_TEXT.lock() {
+                                    *last = Some(text.clone());
                                 }
+                                handle_new_selection(&app_handle, text);
                             }
                         }
-                    } else if hotkey_id == 3 || hotkey_id == 4 {
+                    }
+                } else if msg.message == WM_HOTKEY {
+                    let hotkey_id = msg.w_param as i32;
+                    if hotkey_id == 3 || hotkey_id == 4 {
                         // User pressed Stop Speech hotkey
                         stop_all_speech(&app_handle);
                     }
@@ -557,6 +658,9 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
             if !mouse_hook.is_null() {
                 UnhookWindowsHookEx(mouse_hook);
             }
+            if !kbd_hook.is_null() {
+                UnhookWindowsHookEx(kbd_hook);
+            }
             RemoveClipboardFormatListener(hwnd);
             UnregisterHotKey(hwnd, 1);
             UnregisterHotKey(hwnd, 3);
@@ -570,7 +674,7 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
 #[tauri::command]
 pub fn get_auto_read_config() -> AutoReadConfig {
     let sc = CURRENT_SHORTCUT.lock().unwrap().clone();
-    let current_sc = if sc.is_empty() { "Shift + Space".to_string() } else { sc };
+    let current_sc = if sc.is_empty() { "Win + Space".to_string() } else { sc };
     AutoReadConfig {
         master_enabled: MASTER_SERVICE_ENABLED.load(Ordering::Relaxed),
         auto_read_selection: AUTO_READ_SELECTION.load(Ordering::Relaxed),
@@ -604,6 +708,10 @@ pub fn get_master_enabled() -> bool {
 pub fn set_activation_shortcut(shortcut: String) {
     let clean = shortcut.trim().to_string();
     if !clean.is_empty() {
+        if let Some((mods, vk)) = parse_shortcut_string(&clean) {
+            ACTIVE_SHORTCUT_MODS.store(mods, Ordering::Relaxed);
+            ACTIVE_SHORTCUT_VK.store(vk, Ordering::Relaxed);
+        }
         if let Ok(mut lock) = CURRENT_SHORTCUT.lock() {
             *lock = clean;
         }
@@ -623,7 +731,7 @@ pub fn set_activation_shortcut(shortcut: String) {
 pub fn get_activation_shortcut() -> String {
     let sc = CURRENT_SHORTCUT.lock().unwrap().clone();
     if sc.is_empty() {
-        "Shift + Space".to_string()
+        "Win + Space".to_string()
     } else {
         sc
     }

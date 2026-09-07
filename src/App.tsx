@@ -130,6 +130,8 @@ function MiniPillStandalone() {
 
     const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
 
+    let unlistenStop: (() => void) | undefined;
+
     if (isTauri) {
       listen<HudStatusPayload>('global-hud-status', (event) => {
         if (event.payload) {
@@ -147,10 +149,48 @@ function MiniPillStandalone() {
               clearTimeout(finishTimerRef.current);
               finishTimerRef.current = null;
             }
+          } else if (event.payload.status === 'idle') {
+            setIsPrebufferReady(false);
+            setIsRunwaySafe(false);
+            setBufferedChunks(0);
+            setTotalChunks(0);
+            setPillPhase('compact');
+            if (idleTimerRef.current) {
+              clearTimeout(idleTimerRef.current);
+              idleTimerRef.current = null;
+            }
+            if (finishTimerRef.current) {
+              clearTimeout(finishTimerRef.current);
+              finishTimerRef.current = null;
+            }
+            invoke('hide_quick_reader').catch(() => {});
           }
           setHudStatus(event.payload);
         }
       }).then((u) => { unlistenStatus = u; });
+
+      listen('global-stop-speech', () => {
+        setIsPrebufferReady(false);
+        setIsRunwaySafe(false);
+        setBufferedChunks(0);
+        setTotalChunks(0);
+        setPillPhase('compact');
+        if (idleTimerRef.current) {
+          clearTimeout(idleTimerRef.current);
+          idleTimerRef.current = null;
+        }
+        if (finishTimerRef.current) {
+          clearTimeout(finishTimerRef.current);
+          finishTimerRef.current = null;
+        }
+        setHudStatus({
+          status: 'idle',
+          text: '',
+          voiceName: FIXED_VOICE,
+          speed: FIXED_SPEED,
+        });
+        invoke('hide_quick_reader').catch(() => {});
+      }).then((u) => { unlistenStop = u; });
 
       listen<string>('global-selection-text', (event) => {
         if (event.payload) {
@@ -191,6 +231,7 @@ function MiniPillStandalone() {
       unlistenStatus?.();
       unlistenText?.();
       unlistenPrebuffer?.();
+      unlistenStop?.();
     };
   }, []);
 

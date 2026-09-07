@@ -105,11 +105,15 @@ fn show_quick_reader(app_handle: tauri::AppHandle) {
     }
 }
 
-#[tauri::command]
-fn hide_quick_reader(app_handle: tauri::AppHandle) {
-    if let Some(pill_window) = app_handle.get_webview_window("mini-pill") {
+pub fn hide_hud(app: &tauri::AppHandle) {
+    if let Some(pill_window) = app.get_webview_window("mini-pill") {
         let _ = pill_window.hide();
     }
+}
+
+#[tauri::command]
+fn hide_quick_reader(app_handle: tauri::AppHandle) {
+    hide_hud(&app_handle);
 }
 
 #[tauri::command]

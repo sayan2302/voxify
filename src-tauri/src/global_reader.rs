@@ -56,6 +56,7 @@ mod win32 {
     pub const WM_USER_SELECTION_ACTION: u32 = 0x0400 + 101;
     pub const WM_USER_UPDATE_HOTKEY: u32 = 0x0400 + 102;
     pub const WM_USER_ACTIVATION_SHORTCUT: u32 = 0x0400 + 103;
+    pub const WM_USER_STOP_SHORTCUT: u32 = 0x0400 + 104;
     pub const CF_UNICODETEXT: u32 = 13;
 
     pub const MOD_ALT: u32 = 0x0001;
@@ -69,6 +70,7 @@ mod win32 {
     pub const VK_MENU: u8 = 0x12; // Alt key
     pub const VK_SPACE: u8 = 0x20;
     pub const VK_C: u8 = 0x43;
+    pub const VK_X: u8 = 0x58;
     pub const VK_LWIN: u8 = 0x5B;
     pub const VK_RWIN: u8 = 0x5C;
     pub const KEYEVENTF_KEYUP: u32 = 0x0002;
@@ -206,17 +208,32 @@ mod win32 {
             let msg = w_param as u32;
             if msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN {
                 let hook_struct = *(l_param as *const KBDLLHOOKSTRUCT);
+
+                let win_down = (GetAsyncKeyState(VK_LWIN as i32) as u16 & 0x8000 != 0)
+                    || (GetAsyncKeyState(VK_RWIN as i32) as u16 & 0x8000 != 0);
+                let ctrl_down = GetAsyncKeyState(VK_CONTROL as i32) as u16 & 0x8000 != 0;
+                let shift_down = GetAsyncKeyState(VK_SHIFT as i32) as u16 & 0x8000 != 0;
+                let alt_down = GetAsyncKeyState(VK_MENU as i32) as u16 & 0x8000 != 0;
+
+                // 1. Global Master Kill Switch: Win + Alt + X (or Ctrl + Alt + X fallback)
+                let is_x = hook_struct.vk_code == (VK_X as u32);
+                if is_x && ((win_down && alt_down && !ctrl_down && !shift_down) || (ctrl_down && alt_down && !win_down && !shift_down)) {
+                    keybd_event(0xE8, 0, 0, 0);
+                    keybd_event(0xE8, 0, KEYEVENTF_KEYUP, 0);
+
+                    let thread_id = WORKER_THREAD_ID.load(Ordering::Relaxed);
+                    if thread_id != 0 {
+                        PostThreadMessageW(thread_id, WM_USER_STOP_SHORTCUT, 0, 0);
+                    }
+                    return 1;
+                }
+
+                // 2. Configured Activation Shortcut (e.g. Win + Alt + S)
                 let mods = ACTIVE_SHORTCUT_MODS.load(Ordering::Relaxed);
                 let req_vk = ACTIVE_SHORTCUT_VK.load(Ordering::Relaxed);
 
                 let req_win = (mods & MOD_WIN) != 0;
                 if req_win && hook_struct.vk_code == req_vk {
-                    let win_down = (GetAsyncKeyState(VK_LWIN as i32) as u16 & 0x8000 != 0)
-                        || (GetAsyncKeyState(VK_RWIN as i32) as u16 & 0x8000 != 0);
-                    let ctrl_down = GetAsyncKeyState(VK_CONTROL as i32) as u16 & 0x8000 != 0;
-                    let shift_down = GetAsyncKeyState(VK_SHIFT as i32) as u16 & 0x8000 != 0;
-                    let alt_down = GetAsyncKeyState(VK_MENU as i32) as u16 & 0x8000 != 0;
-
                     let req_ctrl = (mods & MOD_CONTROL) != 0;
                     let req_shift = (mods & MOD_SHIFT) != 0;
                     let req_alt = (mods & MOD_ALT) != 0;
@@ -467,9 +484,14 @@ fn stop_all_speech(app_handle: &AppHandle) {
     if let Ok(mut last) = LAST_READ_TEXT.lock() {
         *last = None;
     }
+    if let Ok(mut cur) = CURRENT_SELECTION_TEXT.lock() {
+        *cur = None;
+    }
+    crate::hide_hud(app_handle);
     let _ = app_handle.emit("global-stop-speech", ());
     let _ = app_handle.emit("global-hud-status", serde_json::json!({
-        "status": "idle"
+        "status": "idle",
+        "text": "",
     }));
 }
 
@@ -651,12 +673,9 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
                         println!("[GlobalReader] Shortcut pressed with no selection while speaking -> stopping");
                         stop_all_speech(&app_handle);
                     }
-                } else if msg.message == WM_HOTKEY {
-                    let hotkey_id = msg.w_param as i32;
-                    if hotkey_id == 3 || hotkey_id == 4 {
-                        // User pressed Stop Speech hotkey
-                        stop_all_speech(&app_handle);
-                    }
+                } else if msg.message == WM_USER_STOP_SHORTCUT || (msg.message == WM_HOTKEY && (msg.w_param == 3 || msg.w_param == 4)) {
+                    println!("[GlobalReader] Master Kill Switch (Win + Alt + X) triggered! Halting speech, purging pipeline & hiding audio pill.");
+                    stop_all_speech(&app_handle);
                 } else if msg.message == WM_CLIPBOARDUPDATE {
                     if IS_SIMULATING_COPY.load(Ordering::SeqCst) {
                         // Ignore our own simulated copy

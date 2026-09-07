@@ -328,7 +328,7 @@ pub fn run() {
             let open_item = MenuItem::with_id(
                 app,
                 "open",
-                "📖 Open Voxify Window",
+                "⚙️ Preferences & Voice Settings",
                 true,
                 None::<&str>
             )?;

@@ -353,6 +353,7 @@ export function App() {
   });
 
   const auditionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const reReadTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
 
   // Interactive Shortcut Recording Listener
@@ -560,6 +561,7 @@ export function App() {
     const wordCount = sampleText.split(/\s+/).length;
 
     if (isTauri) {
+      await invoke('stop_kokoro_native').catch(() => {});
       await invoke('show_quick_reader').catch(() => {});
       await emit('global-selection-text', sampleText).catch(() => {});
       await emit('global-hud-status', {
@@ -584,12 +586,19 @@ export function App() {
           voice: FIXED_VOICE,
           speed: FIXED_SPEED,
         }).catch(() => {});
-      }, 350);
+      }, 150);
     }
   };
 
   const handleReReadHistoryItem = async (item: HistoryItem) => {
+    if (reReadTimerRef.current) {
+      clearTimeout(reReadTimerRef.current);
+      reReadTimerRef.current = null;
+    }
+
     if (isTauri) {
+      // Immediately stop any prior audio playing in the player/pipeline (< 0.1ms)
+      await invoke('stop_kokoro_native').catch(() => {});
       await invoke('show_quick_reader').catch(() => {});
       await emit('global-selection-text', item.text).catch(() => {});
       await emit('global-hud-status', {
@@ -600,13 +609,14 @@ export function App() {
         wordCount: item.wordCount,
       } as HudStatusPayload).catch(() => {});
 
-      setTimeout(() => {
+      reReadTimerRef.current = setTimeout(() => {
         invoke('speak_kokoro_native', {
           text: item.text,
           voice: FIXED_VOICE,
           speed: FIXED_SPEED,
         }).catch(() => {});
-      }, 350);
+        reReadTimerRef.current = null;
+      }, 50);
     }
   };
 

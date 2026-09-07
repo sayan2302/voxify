@@ -598,40 +598,58 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
                         continue;
                     }
 
-                    // If already speaking, pressing activation shortcut stops/pauses playback
-                    if crate::native_kokoro::is_speaking() {
-                        stop_all_speech(&app_handle);
-                        continue;
-                    }
-
-                    // User pressed Activation Shortcut (e.g. Win + Space)
-                    // Capture currently highlighted text
+                    // 1. Simulate copy keystrokes to capture whatever text is highlighted in the active window
                     simulate_copy_keystrokes();
                     Sleep(30);
                     IS_SIMULATING_COPY.store(false, Ordering::SeqCst);
 
-                    if let Some(text) = read_clipboard_text() {
-                        if text.len() >= 2 {
+                    let is_currently_speaking = crate::native_kokoro::is_speaking();
+                    let copied_text = read_clipboard_text();
+
+                    if let Some(text) = copied_text {
+                        let clean = text.trim().to_string();
+                        if clean.len() >= 2 {
                             let is_same_text = {
                                 let current = CURRENT_SELECTION_TEXT.lock().unwrap();
-                                current.as_ref().map(|c| c == &text).unwrap_or(false)
+                                current.as_ref().map(|c| c.trim() == clean).unwrap_or(false)
                             };
 
-                            let is_safe = crate::native_kokoro::is_active_session_runway_safe(
-                                &text,
-                                &crate::native_kokoro::get_current_voice_name(),
-                                crate::native_kokoro::get_current_speed(),
-                            );
-
-                            if is_same_text && is_safe {
-                                play_current_selection(&app_handle);
-                            } else {
-                                if let Ok(mut last) = LAST_READ_TEXT.lock() {
-                                    *last = Some(text.clone());
+                            if is_same_text && is_currently_speaking {
+                                // User pressed shortcut while this exact text is actively speaking: toggle stop
+                                println!("[GlobalReader] Shortcut pressed while speaking same text -> stopping");
+                                stop_all_speech(&app_handle);
+                            } else if is_same_text {
+                                // Text is already staged in the audio pill: check if runway is safe to play
+                                let is_safe = crate::native_kokoro::is_active_session_runway_safe(
+                                    &clean,
+                                    &crate::native_kokoro::get_current_voice_name(),
+                                    crate::native_kokoro::get_current_speed(),
+                                );
+                                if is_safe {
+                                    play_current_selection(&app_handle);
+                                } else {
+                                    handle_new_selection(&app_handle, clean);
                                 }
-                                handle_new_selection(&app_handle, text);
+                            } else {
+                                // NEW text highlighted!
+                                println!("[GlobalReader] New text selection captured via shortcut. Preempting earlier playback!");
+                                // Immediately halt earlier running playback and flush pipeline
+                                let _ = crate::native_kokoro::stop();
+                                let _ = crate::native_tts::stop();
+                                if let Ok(mut last) = LAST_READ_TEXT.lock() {
+                                    *last = Some(clean.clone());
+                                }
+                                // Prioritize and ready the next selection in the audio pill
+                                handle_new_selection(&app_handle, clean);
                             }
+                            continue;
                         }
+                    }
+
+                    // If no valid text in clipboard and audio is speaking: stop speech
+                    if is_currently_speaking {
+                        println!("[GlobalReader] Shortcut pressed with no selection while speaking -> stopping");
+                        stop_all_speech(&app_handle);
                     }
                 } else if msg.message == WM_HOTKEY {
                     let hotkey_id = msg.w_param as i32;
@@ -787,4 +805,10 @@ pub fn trigger_read_selection() {
 #[tauri::command]
 pub fn stop_speech(app_handle: AppHandle) {
     stop_all_speech(&app_handle);
+}
+
+pub fn set_current_selection_text(text: String) {
+    if let Ok(mut current) = CURRENT_SELECTION_TEXT.lock() {
+        *current = Some(text);
+    }
 }

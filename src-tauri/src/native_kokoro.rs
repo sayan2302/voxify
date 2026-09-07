@@ -1413,6 +1413,14 @@ pub fn speak(text: &str, voice_name: &str, speed: f32) -> Result<(), String> {
         }
     }
 
+    // Immediately halt and empty any existing audio sink playback (< 0.1ms)
+    // so previous audio never continues draining or clashing with new speech!
+    if let Ok(player_guard) = AUDIO_PLAYER.lock() {
+        if let Some(ref player) = *player_guard {
+            player.stop();
+        }
+    }
+
     let speed_key = (speed * 100.0).round() as u32;
     let play_gen = PLAYBACK_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
 
@@ -1430,6 +1438,8 @@ pub fn speak(text: &str, voice_name: &str, speed: f32) -> Result<(), String> {
             (session.session_id, session.chunks.len())
         } else {
             drop(guard);
+            // Invalidate any previous background prebuffering worker
+            PIPELINE_SESSION_ID.fetch_add(1, Ordering::SeqCst);
             prebuffer_first_chunk(clean, voice_name, speed);
             let guard = PIPELINE_STATE.lock().unwrap();
             let session = guard.as_ref().unwrap();

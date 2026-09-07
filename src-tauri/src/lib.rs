@@ -146,6 +146,7 @@ fn set_native_voice(name: String) -> Result<(), String> {
 
 #[tauri::command]
 fn speak_kokoro_native(text: String, voice: Option<String>, speed: Option<f32>) -> Result<(), String> {
+    global_reader::set_current_selection_text(text.clone());
     let v = voice.unwrap_or_else(|| native_kokoro::get_current_voice_name());
     let s = speed.unwrap_or_else(|| native_kokoro::get_current_speed());
     std::thread::spawn(move || {

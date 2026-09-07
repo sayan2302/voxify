@@ -238,6 +238,8 @@ pub fn run() {
             global_reader::set_activation_shortcut,
             global_reader::get_activation_shortcut,
             global_reader::set_auto_read_enabled,
+            global_reader::set_auto_copy_selection_enabled,
+            global_reader::get_auto_copy_selection_enabled,
             global_reader::set_auto_read_copy_enabled,
             global_reader::set_settle_delay_ms,
             global_reader::set_earcon_enabled,

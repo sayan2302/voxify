@@ -5,6 +5,7 @@ use tauri::{AppHandle, Emitter};
 
 pub static MASTER_SERVICE_ENABLED: AtomicBool = AtomicBool::new(true);
 pub static AUTO_READ_SELECTION: AtomicBool = AtomicBool::new(false);
+pub static AUTO_COPY_SELECTION: AtomicBool = AtomicBool::new(false);
 pub static AUTO_READ_COPY: AtomicBool = AtomicBool::new(false);
 pub static SETTLE_DELAY_MS: AtomicU32 = AtomicU32::new(10);
 pub static EARCON_ENABLED: AtomicBool = AtomicBool::new(true);
@@ -23,6 +24,7 @@ static SELECTION_SEQUENCE: AtomicU32 = AtomicU32::new(0);
 pub struct AutoReadConfig {
     pub master_enabled: bool,
     pub auto_read_selection: bool,
+    pub auto_copy_selection: bool,
     pub auto_read_copy: bool,
     pub activation_shortcut: String,
     pub settle_delay_ms: u32,
@@ -172,7 +174,9 @@ mod win32 {
     static mut LAST_UP_PT: POINT = POINT { x: 0, y: 0 };
 
     pub unsafe extern "system" fn mouse_hook_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
-        if n_code >= 0 && AUTO_READ_SELECTION.load(Ordering::Relaxed) && MASTER_SERVICE_ENABLED.load(Ordering::Relaxed) {
+        let is_tracking = (AUTO_READ_SELECTION.load(Ordering::Relaxed) || AUTO_COPY_SELECTION.load(Ordering::Relaxed))
+            && MASTER_SERVICE_ENABLED.load(Ordering::Relaxed);
+        if n_code >= 0 && is_tracking {
             let hook_struct = *(l_param as *const MSLLHOOKSTRUCT);
             let msg = w_param as u32;
 
@@ -607,12 +611,21 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
                     Sleep(15);
                     IS_SIMULATING_COPY.store(false, Ordering::SeqCst);
 
-                    if let Some(text) = read_clipboard_text() {
-                        if text.len() >= 2 {
-                            if let Ok(mut last) = LAST_READ_TEXT.lock() {
-                                *last = Some(text.clone());
+                    let do_read = AUTO_READ_SELECTION.load(Ordering::Relaxed);
+                    let do_copy = AUTO_COPY_SELECTION.load(Ordering::Relaxed);
+
+                    if do_copy {
+                        println!("[GlobalReader] Auto-copied selected text to clipboard.");
+                    }
+
+                    if do_read {
+                        if let Some(text) = read_clipboard_text() {
+                            if text.len() >= 2 {
+                                if let Ok(mut last) = LAST_READ_TEXT.lock() {
+                                    *last = Some(text.clone());
+                                }
+                                handle_new_selection(&app_handle, text);
                             }
-                            handle_new_selection(&app_handle, text);
                         }
                     }
                 } else if msg.message == WM_USER_ACTIVATION_SHORTCUT || (msg.message == WM_HOTKEY && msg.w_param == 1) {
@@ -719,6 +732,7 @@ pub fn get_auto_read_config() -> AutoReadConfig {
     AutoReadConfig {
         master_enabled: MASTER_SERVICE_ENABLED.load(Ordering::Relaxed),
         auto_read_selection: AUTO_READ_SELECTION.load(Ordering::Relaxed),
+        auto_copy_selection: AUTO_COPY_SELECTION.load(Ordering::Relaxed),
         auto_read_copy: AUTO_READ_COPY.load(Ordering::Relaxed),
         activation_shortcut: current_sc,
         settle_delay_ms: SETTLE_DELAY_MS.load(Ordering::Relaxed),
@@ -781,6 +795,16 @@ pub fn get_activation_shortcut() -> String {
 #[tauri::command]
 pub fn set_auto_read_enabled(enabled: bool) {
     AUTO_READ_SELECTION.store(enabled, Ordering::Relaxed);
+}
+
+#[tauri::command]
+pub fn set_auto_copy_selection_enabled(enabled: bool) {
+    AUTO_COPY_SELECTION.store(enabled, Ordering::Relaxed);
+}
+
+#[tauri::command]
+pub fn get_auto_copy_selection_enabled() -> bool {
+    AUTO_COPY_SELECTION.load(Ordering::Relaxed)
 }
 
 #[tauri::command]

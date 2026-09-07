@@ -29,6 +29,7 @@ export interface HudStatusPayload {
 export interface AutoReadConfig {
   master_enabled?: boolean;
   auto_read_selection: boolean;
+  auto_copy_selection?: boolean;
   auto_read_copy: boolean;
   activation_shortcut?: string;
   settle_delay_ms: number;
@@ -375,6 +376,14 @@ export function App() {
 
   // Preferences State
   const [autoReadSelection, setAutoReadSelection] = useState<boolean>(false);
+  const [autoCopySelection, setAutoCopySelection] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('voxify_auto_copy_selection');
+      return saved !== null ? JSON.parse(saved) : false;
+    } catch {
+      return false;
+    }
+  });
   const [earconEnabled, setEarconEnabled] = useState<boolean>(true);
   const [settleDelayMs, setSettleDelayMs] = useState<number>(10);
   const [auditioningSarah, setAuditioningSarah] = useState<boolean>(false);
@@ -446,12 +455,14 @@ export function App() {
     if (isTauri) {
       invoke('set_kokoro_voice', { voice: FIXED_VOICE }).catch(() => {});
       invoke('set_kokoro_speed', { speed: FIXED_SPEED }).catch(() => {});
+      invoke('set_auto_copy_selection_enabled', { enabled: autoCopySelection }).catch(() => {});
 
       invoke<AutoReadConfig>('get_auto_read_config')
         .then((config) => {
           if (config) {
             if (config.master_enabled !== undefined) setMasterEnabled(config.master_enabled);
             setAutoReadSelection(config.auto_read_selection);
+            if (config.auto_copy_selection !== undefined) setAutoCopySelection(config.auto_copy_selection);
             if (config.activation_shortcut) setActivationShortcut(config.activation_shortcut);
             setSettleDelayMs(config.settle_delay_ms);
             setEarconEnabled(config.earcon_enabled);
@@ -545,6 +556,16 @@ export function App() {
     setAutoReadSelection(enabled);
     if (isTauri) {
       invoke('set_auto_read_enabled', { enabled }).catch(() => {});
+    }
+  };
+
+  const handleToggleAutoCopySelection = (enabled: boolean) => {
+    setAutoCopySelection(enabled);
+    try {
+      localStorage.setItem('voxify_auto_copy_selection', JSON.stringify(enabled));
+    } catch {}
+    if (isTauri) {
+      invoke('set_auto_copy_selection_enabled', { enabled }).catch(() => {});
     }
   };
 
@@ -877,6 +898,20 @@ export function App() {
                     <HandySwitch
                       checked={autoReadSelection}
                       onChange={handleToggleAutoReadSelection}
+                    />
+                  </div>
+
+                  {/* Row: Auto-Copy on Mouse Selection */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-[#2563eb]/30 transition-colors">
+                    <div className="flex items-center">
+                      <span className="text-sm font-medium text-slate-200">
+                        Auto-Copy on Selection
+                      </span>
+                      <InfoTooltip text="Automatically copies any highlighted text directly to your clipboard the moment you finish selecting it with your mouse or double-clicking." />
+                    </div>
+                    <HandySwitch
+                      checked={autoCopySelection}
+                      onChange={handleToggleAutoCopySelection}
                     />
                   </div>
                 </div>

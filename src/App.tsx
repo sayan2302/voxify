@@ -346,6 +346,7 @@ export function App() {
     }
   });
 
+  const auditionTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
 
   // Interactive Shortcut Recording Listener
@@ -430,8 +431,20 @@ export function App() {
         }
       });
 
+      // Listen for speech completion to reset preview button
+      const unlistenStatus = listen<HudStatusPayload>('global-hud-status', (event) => {
+        if (event.payload?.status === 'finished') {
+          setAuditioningSarah(false);
+          if (auditionTimerRef.current) {
+            clearTimeout(auditionTimerRef.current);
+            auditionTimerRef.current = null;
+          }
+        }
+      });
+
       return () => {
         unlisten.then(u => u());
+        unlistenStatus.then(u => u());
       };
     }
   }, [isTauri]);
@@ -486,6 +499,10 @@ export function App() {
   const handleAuditionSarah = () => {
     if (auditioningSarah) {
       setAuditioningSarah(false);
+      if (auditionTimerRef.current) {
+        clearTimeout(auditionTimerRef.current);
+        auditionTimerRef.current = null;
+      }
       if (isTauri) {
         invoke('stop_kokoro_native').catch(() => {});
       }
@@ -501,9 +518,11 @@ export function App() {
       }).catch(() => {});
     }
 
-    setTimeout(() => {
+    if (auditionTimerRef.current) clearTimeout(auditionTimerRef.current);
+    auditionTimerRef.current = setTimeout(() => {
       setAuditioningSarah(false);
-    }, 4500);
+      auditionTimerRef.current = null;
+    }, 6200);
   };
 
   const handlePreviewEarcon = () => {

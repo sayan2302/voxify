@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -17,6 +18,59 @@ static AUDIO_PLAYER: Mutex<Option<AudioPlayer>> = Mutex::new(None);
 static CURRENT_VOICE: Mutex<String> = Mutex::new(String::new());
 static CURRENT_SPEED: Mutex<f32> = Mutex::new(0.9);
 static PLAYBACK_GENERATION: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Clone)]
+pub struct CachedAudioChunk {
+    pub samples: Vec<f32>,
+    pub sample_rate: u32,
+    pub duration_secs: f32,
+    pub pause_ms: u32,
+}
+
+static CHUNK_CACHE: Mutex<Option<HashMap<(i32, u32, String), CachedAudioChunk>>> = Mutex::new(None);
+
+pub fn cache_audio_chunk(
+    sid: i32,
+    speed_key: u32,
+    chunk_text: &str,
+    samples: Vec<f32>,
+    sample_rate: u32,
+    duration_secs: f32,
+    pause_ms: u32,
+) {
+    let key = (sid, speed_key, chunk_text.trim().to_string());
+    if let Ok(mut guard) = CHUNK_CACHE.lock() {
+        if guard.is_none() {
+            *guard = Some(HashMap::new());
+        }
+        if let Some(ref mut map) = *guard {
+            if map.len() >= 500 {
+                if let Some(k) = map.keys().next().cloned() {
+                    map.remove(&k);
+                }
+            }
+            map.insert(
+                key,
+                CachedAudioChunk {
+                    samples,
+                    sample_rate,
+                    duration_secs,
+                    pause_ms,
+                },
+            );
+        }
+    }
+}
+
+pub fn get_cached_chunk(sid: i32, speed_key: u32, chunk_text: &str) -> Option<CachedAudioChunk> {
+    let key = (sid, speed_key, chunk_text.trim().to_string());
+    if let Ok(guard) = CHUNK_CACHE.lock() {
+        if let Some(ref map) = *guard {
+            return map.get(&key).cloned();
+        }
+    }
+    None
+}
 
 #[derive(Clone)]
 struct PipelineChunk {
@@ -339,13 +393,31 @@ pub fn init(model_dir: Option<&Path>) -> Result<(), String> {
     println!("[NativeKokoro] Initializing Kokoro-82M high-performance neural engine ({} threads)...", threads_per_engine);
     let tts = OfflineTts::create(&config).ok_or_else(|| "Failed to create OfflineTts instance".to_string())?;
 
-    // Warm up execution graph once with Sarah
+    // Warm up execution graph and pre-cache Sarah's audition voice for INSTANT playback (< 1ms)
     let warmup_cfg = sherpa_onnx::GenerationConfig {
-        sid: 1,
+        sid: 1, // Sarah
         speed: 1.0,
         ..Default::default()
     };
-    let _ = tts.generate_with_config("Ready.", &warmup_cfg, None::<fn(&[f32], f32) -> bool>);
+
+    let audition_text = "Hi, I'm Sarah. I read any highlighted text across your Windows apps with natural human expression.";
+    let audition_chunks = split_into_speech_chunks(audition_text);
+    for chunk in &audition_chunks {
+        if let Some(audio) = tts.generate_with_config(chunk, &warmup_cfg, None::<fn(&[f32], f32) -> bool>) {
+            let raw_samples = audio.samples();
+            let sr = audio.sample_rate() as u32;
+            if !raw_samples.is_empty() {
+                let pause_ms = get_chunk_pause_ms(chunk);
+                let chunk_samples = prepare_chunk_samples(raw_samples, sr, pause_ms);
+                let chunk_dur = chunk_samples.len() as f32 / sr as f32;
+                cache_audio_chunk(1, 100, chunk, chunk_samples, sr, chunk_dur, pause_ms);
+            }
+        }
+    }
+    println!(
+        "[NativeKokoro] Pre-cached Sarah's signature audition voice ({} chunks in RAM) for instant 0ms playback!",
+        audition_chunks.len()
+    );
 
     if let Ok(mut guard) = TTS_ENGINES.lock() {
         *guard = vec![
@@ -1160,6 +1232,56 @@ pub fn prebuffer_first_chunk(text: &str, voice_name: &str, speed: f32) {
 
     let sid = voice_name_to_sid(&v_name);
     let effective_speed = speed.clamp(0.5, 2.5);
+
+    // Fast Path: If all chunks are already in cache, populate RAM immediately (0 ms latency)!
+    let all_cached = chunks.iter().all(|c| get_cached_chunk(sid, speed_key, c).is_some());
+    if all_cached {
+        let mut ready = Vec::with_capacity(num_chunks);
+        let mut cumulative_dur = 0.0f32;
+        for (idx, chunk) in chunks.iter().enumerate() {
+            let cached = get_cached_chunk(sid, speed_key, chunk).unwrap();
+            cumulative_dur += cached.duration_secs;
+            ready.push(Some(PipelineChunk {
+                idx,
+                samples: cached.samples,
+                sample_rate: cached.sample_rate,
+                duration_secs: cached.duration_secs,
+            }));
+        }
+
+        if let Ok(mut guard) = PIPELINE_STATE.lock() {
+            *guard = Some(PipelineSession {
+                session_id,
+                text_key: clean.clone(),
+                voice_name: v_name.clone(),
+                speed_key,
+                chunks: chunks.clone(),
+                ready_chunks: ready,
+                is_fully_buffered: true,
+            });
+        }
+        PIPELINE_CONDVAR.notify_all();
+
+        println!(
+            "[NativeKokoro Cache HIT] Instant 0ms prebuffer for all {} chunk(s) ({:.2}s audio in RAM)!",
+            num_chunks, cumulative_dur
+        );
+
+        if let Ok(app_guard) = APP_HANDLE.lock() {
+            if let Some(ref app) = *app_guard {
+                let _ = app.emit("global-prebuffer-ready", serde_json::json!({
+                    "chunkIndex": num_chunks,
+                    "totalChunks": num_chunks,
+                    "chunksBuffered": num_chunks,
+                    "durationSecs": cumulative_dur,
+                    "isRunwaySafe": true,
+                }));
+            }
+        }
+
+        return;
+    }
+
     let gen_config = sherpa_onnx::GenerationConfig {
         sid,
         speed: effective_speed,
@@ -1168,8 +1290,10 @@ pub fn prebuffer_first_chunk(text: &str, voice_name: &str, speed: f32) {
 
     // Spawn dedicated sequential worker on the single focused engine
     std::thread::spawn(move || {
-        // Yield 50ms of CPU to let the entrance droplet animation smoothly mount
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        let first_is_cached = get_cached_chunk(sid, speed_key, chunks.first().map(|s| s.as_str()).unwrap_or("")).is_some();
+        if !first_is_cached {
+            std::thread::sleep(std::time::Duration::from_millis(30));
+        }
 
         for (idx, chunk) in chunks.into_iter().enumerate() {
             if PIPELINE_SESSION_ID.load(Ordering::Relaxed) != session_id {
@@ -1177,79 +1301,90 @@ pub fn prebuffer_first_chunk(text: &str, voice_name: &str, speed: f32) {
             }
 
             let t0 = std::time::Instant::now();
-            let audio_opt = {
-                let guard = engine.lock().unwrap();
-                guard.generate_with_config(&chunk, &gen_config, None::<fn(&[f32], f32) -> bool>)
+            let (chunk_samples, sr, chunk_dur, pause_ms, from_cache) = if let Some(cached) = get_cached_chunk(sid, speed_key, &chunk) {
+                (cached.samples, cached.sample_rate, cached.duration_secs, cached.pause_ms, true)
+            } else {
+                let audio_opt = {
+                    let guard = engine.lock().unwrap();
+                    guard.generate_with_config(&chunk, &gen_config, None::<fn(&[f32], f32) -> bool>)
+                };
+
+                if PIPELINE_SESSION_ID.load(Ordering::Relaxed) != session_id {
+                    return;
+                }
+
+                if let Some(audio) = audio_opt {
+                    let raw_samples = audio.samples();
+                    let sr = audio.sample_rate() as u32;
+                    if !raw_samples.is_empty() {
+                        let pause_ms = get_chunk_pause_ms(&chunk);
+                        let chunk_samples = prepare_chunk_samples(raw_samples, sr, pause_ms);
+                        let chunk_dur = chunk_samples.len() as f32 / sr as f32;
+                        cache_audio_chunk(sid, speed_key, &chunk, chunk_samples.clone(), sr, chunk_dur, pause_ms);
+                        (chunk_samples, sr, chunk_dur, pause_ms, false)
+                    } else {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
             };
 
-            if PIPELINE_SESSION_ID.load(Ordering::Relaxed) != session_id {
-                return;
+            let pipeline_chunk = PipelineChunk {
+                idx,
+                samples: chunk_samples,
+                sample_rate: sr,
+                duration_secs: chunk_dur,
+            };
+
+            let mut cumulative_dur = 0.0f32;
+            let mut ready_count = 0usize;
+
+            if let Ok(mut guard) = PIPELINE_STATE.lock() {
+                if let Some(ref mut session) = *guard {
+                    if session.session_id == session_id {
+                        session.ready_chunks[idx] = Some(pipeline_chunk);
+                        if session.ready_chunks.iter().all(|c| c.is_some()) {
+                            session.is_fully_buffered = true;
+                        }
+                        for c in session.ready_chunks.iter().flatten() {
+                            cumulative_dur += c.duration_secs;
+                            ready_count += 1;
+                        }
+                    } else {
+                        return;
+                    }
+                } else {
+                    return;
+                }
             }
 
-            if let Some(audio) = audio_opt {
-                let raw_samples = audio.samples();
-                let sr = audio.sample_rate() as u32;
-                if !raw_samples.is_empty() {
-                    let pause_ms = get_chunk_pause_ms(&chunk);
-                    let chunk_samples = prepare_chunk_samples(raw_samples, sr, pause_ms);
-                    let chunk_dur = chunk_samples.len() as f32 / sr as f32;
+            let is_safe = is_runway_safe_condition(ready_count, num_chunks, cumulative_dur);
 
-                    let pipeline_chunk = PipelineChunk {
-                        idx,
-                        samples: chunk_samples,
-                        sample_rate: sr,
-                        duration_secs: chunk_dur,
-                    };
+            println!(
+                "[NativeKokoro Worker] Chunk {}/{} ({:.2}s audio, {}ms pause) in {:.2}ms (total buffer: {:.2}s across {} ready chunk(s), safe: {}, cached: {})",
+                idx + 1,
+                num_chunks,
+                chunk_dur,
+                pause_ms,
+                t0.elapsed().as_secs_f64() * 1000.0,
+                cumulative_dur,
+                ready_count,
+                is_safe,
+                from_cache
+            );
 
-                    let mut cumulative_dur = 0.0f32;
-                    let mut ready_count = 0usize;
+            PIPELINE_CONDVAR.notify_all();
 
-                    if let Ok(mut guard) = PIPELINE_STATE.lock() {
-                        if let Some(ref mut session) = *guard {
-                            if session.session_id == session_id {
-                                session.ready_chunks[idx] = Some(pipeline_chunk);
-                                if session.ready_chunks.iter().all(|c| c.is_some()) {
-                                    session.is_fully_buffered = true;
-                                }
-                                for c in session.ready_chunks.iter().flatten() {
-                                    cumulative_dur += c.duration_secs;
-                                    ready_count += 1;
-                                }
-                            } else {
-                                return;
-                            }
-                        } else {
-                            return;
-                        }
-                    }
-
-                    let is_safe = is_runway_safe_condition(ready_count, num_chunks, cumulative_dur);
-
-                    println!(
-                        "[NativeKokoro Worker] Chunk {}/{} ({:.2}s audio, {}ms pause) in {:.2}ms (total buffer: {:.2}s across {} ready chunk(s), safe: {})",
-                        idx + 1,
-                        num_chunks,
-                        chunk_dur,
-                        pause_ms,
-                        t0.elapsed().as_secs_f64() * 1000.0,
-                        cumulative_dur,
-                        ready_count,
-                        is_safe
-                    );
-
-                    PIPELINE_CONDVAR.notify_all();
-
-                    if let Ok(app_guard) = APP_HANDLE.lock() {
-                        if let Some(ref app) = *app_guard {
-                            let _ = app.emit("global-prebuffer-ready", serde_json::json!({
-                                "chunkIndex": idx + 1,
-                                "totalChunks": num_chunks,
-                                "chunksBuffered": ready_count,
-                                "durationSecs": cumulative_dur,
-                                "isRunwaySafe": is_safe,
-                            }));
-                        }
-                    }
+            if let Ok(app_guard) = APP_HANDLE.lock() {
+                if let Some(ref app) = *app_guard {
+                    let _ = app.emit("global-prebuffer-ready", serde_json::json!({
+                        "chunkIndex": idx + 1,
+                        "totalChunks": num_chunks,
+                        "chunksBuffered": ready_count,
+                        "durationSecs": cumulative_dur,
+                        "isRunwaySafe": is_safe,
+                    }));
                 }
             }
         }
@@ -1435,6 +1570,28 @@ pub fn speak(text: &str, voice_name: &str, speed: f32) -> Result<(), String> {
         *s = speed;
     }
 
+    // Background watcher to notify UI when audio sink finishes playing
+    let clean_str = clean.to_string();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        while is_speaking() {
+            if PLAYBACK_GENERATION.load(Ordering::Relaxed) != play_gen {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        if PLAYBACK_GENERATION.load(Ordering::Relaxed) == play_gen {
+            if let Ok(app_guard) = APP_HANDLE.lock() {
+                if let Some(ref app) = *app_guard {
+                    let _ = app.emit("global-hud-status", serde_json::json!({
+                        "status": "finished",
+                        "text": clean_str,
+                    }));
+                }
+            }
+        }
+    });
+
     Ok(())
 }
 
@@ -1508,19 +1665,32 @@ pub fn synthesize_raw(text: &str, voice_name: &str, speed: f32) -> Result<(Vec<f
     let mut combined_samples = Vec::new();
     let mut sample_rate_out = 24000u32;
 
+    let speed_key = (effective_speed * 100.0).round() as u32;
+
     for chunk in chunks {
-        let audio_opt = {
-            let guard = engine.lock().map_err(|e| e.to_string())?;
-            guard.generate_with_config(&chunk, &gen_config, None::<fn(&[f32], f32) -> bool>)
+        let (prepared, sr) = if let Some(cached) = get_cached_chunk(sid, speed_key, &chunk) {
+            (cached.samples, cached.sample_rate)
+        } else {
+            let audio_opt = {
+                let guard = engine.lock().map_err(|e| e.to_string())?;
+                guard.generate_with_config(&chunk, &gen_config, None::<fn(&[f32], f32) -> bool>)
+            };
+
+            if let Some(audio) = audio_opt {
+                let raw_samples = audio.samples();
+                let sr = audio.sample_rate() as u32;
+                let pause_ms = get_chunk_pause_ms(&chunk);
+                let prepared = prepare_chunk_samples(raw_samples, sr, pause_ms);
+                let chunk_dur = prepared.len() as f32 / sr as f32;
+                cache_audio_chunk(sid, speed_key, &chunk, prepared.clone(), sr, chunk_dur, pause_ms);
+                (prepared, sr)
+            } else {
+                continue;
+            }
         };
 
-        if let Some(audio) = audio_opt {
-            let raw_samples = audio.samples();
-            sample_rate_out = audio.sample_rate() as u32;
-            let pause_ms = get_chunk_pause_ms(&chunk);
-            let prepared = prepare_chunk_samples(raw_samples, sample_rate_out, pause_ms);
-            combined_samples.extend(prepared);
-        }
+        sample_rate_out = sr;
+        combined_samples.extend(prepared);
     }
 
     Ok((combined_samples, sample_rate_out))

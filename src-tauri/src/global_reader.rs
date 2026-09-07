@@ -527,13 +527,13 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
             }
 
             // Register global hotkeys
-            // ID 1: Configurable Activation Shortcut (default: Ctrl + Shift + Space)
+            // ID 1: Configurable Activation Shortcut (default: Win + Alt + S)
             let (init_mods, init_vk) = {
                 let mut current = CURRENT_SHORTCUT.lock().unwrap();
                 if current.is_empty() {
-                    *current = "Ctrl + Shift + Space".to_string();
+                    *current = "Win + Alt + S".to_string();
                 }
-                let parsed = parse_shortcut_string(&current).unwrap_or((MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, VK_SPACE as u32));
+                let parsed = parse_shortcut_string(&current).unwrap_or((MOD_WIN | MOD_ALT | MOD_NOREPEAT, 0x53));
                 ACTIVE_SHORTCUT_MODS.store(parsed.0, Ordering::Relaxed);
                 ACTIVE_SHORTCUT_VK.store(parsed.1, Ordering::Relaxed);
                 parsed
@@ -678,7 +678,7 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
 #[tauri::command]
 pub fn get_auto_read_config() -> AutoReadConfig {
     let sc = CURRENT_SHORTCUT.lock().unwrap().clone();
-    let current_sc = if sc.is_empty() { "Ctrl + Shift + Space".to_string() } else { sc };
+    let current_sc = if sc.is_empty() { "Win + Alt + S".to_string() } else { sc };
     AutoReadConfig {
         master_enabled: MASTER_SERVICE_ENABLED.load(Ordering::Relaxed),
         auto_read_selection: AUTO_READ_SELECTION.load(Ordering::Relaxed),
@@ -735,7 +735,7 @@ pub fn set_activation_shortcut(shortcut: String) {
 pub fn get_activation_shortcut() -> String {
     let sc = CURRENT_SHORTCUT.lock().unwrap().clone();
     if sc.is_empty() {
-        "Ctrl + Shift + Space".to_string()
+        "Win + Alt + S".to_string()
     } else {
         sc
     }

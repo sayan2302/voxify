@@ -322,12 +322,12 @@ export function App() {
   const [activationShortcut, setActivationShortcut] = useState<string>(() => {
     try {
       const saved = localStorage.getItem('voxify_activation_shortcut');
-      if (!saved || saved === 'Shift + Space' || saved === 'Win + Space') {
-        return 'Ctrl + Shift + Space';
+      if (!saved || saved === 'Shift + Space' || saved === 'Win + Space' || saved === 'Ctrl + Shift + Space') {
+        return 'Win + Alt + S';
       }
       return saved;
     } catch {
-      return 'Ctrl + Shift + Space';
+      return 'Win + Alt + S';
     }
   });
   const [isRecordingShortcut, setIsRecordingShortcut] = useState<boolean>(false);
@@ -464,7 +464,7 @@ export function App() {
   };
 
   const handleResetShortcut = () => {
-    const defaultShortcut = 'Ctrl + Shift + Space';
+    const defaultShortcut = 'Win + Alt + S';
     setActivationShortcut(defaultShortcut);
     setIsRecordingShortcut(false);
     try {
@@ -774,7 +774,7 @@ export function App() {
                         {isRecordingShortcut ? 'Press new keys...' : activationShortcut}
                       </button>
                       <button
-                        title="Reset hotkey to default (Ctrl + Shift + Space)"
+                        title="Reset hotkey to default (Win + Alt + S)"
                         onClick={handleResetShortcut}
                         className="p-1 text-slate-500 hover:text-slate-300 transition-colors active:scale-95"
                       >

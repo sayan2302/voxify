@@ -10,11 +10,11 @@
     --bg-secondary: #121214;
     --bg-card: #202024;
     --border-subtle: rgba(255, 255, 255, 0.08);
-    --border-accent: rgba(113, 0, 48, 0.4);
-    --burgundy-base: #710030;
-    --burgundy-mid: #8b0a3e;
-    --burgundy-bright: #b31b54;
-    --burgundy-light: #e05589;
+    --border-accent: rgba(37, 99, 235, 0.4);
+    --blue-base: #2563eb;
+    --blue-mid: #1d4ed8;
+    --blue-bright: #3b82f6;
+    --blue-light: #60a5fa;
   }
 
   body {
@@ -52,12 +52,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(113, 0, 48, 0.45);
+  background: rgba(37, 99, 235, 0.45);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(179, 27, 84, 0.75);
+  background: rgba(59, 130, 246, 0.75);
 }
 
 /* High-performance solid dark theme panels (Zero GPU compositor blur overhead) */

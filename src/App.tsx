@@ -62,7 +62,7 @@ const InfoTooltip: React.FC<{ text: string }> = ({ text }) => {
         i
       </span>
       {show && (
-        <span className="absolute left-6 top-1/2 -translate-y-1/2 z-50 w-60 p-2.5 rounded-lg bg-[#18181b]/95 border border-[#710030]/40 text-[11px] text-slate-200 shadow-2xl backdrop-blur-md leading-relaxed pointer-events-none">
+        <span className="absolute left-6 top-1/2 -translate-y-1/2 z-50 w-60 p-2.5 rounded-lg bg-[#18181b]/95 border border-[#2563eb]/40 text-[11px] text-slate-200 shadow-2xl backdrop-blur-md leading-relaxed pointer-events-none">
           {text}
         </span>
       )}
@@ -71,7 +71,7 @@ const InfoTooltip: React.FC<{ text: string }> = ({ text }) => {
 };
 
 /**
- * Handy-Style Smooth Toggle Switch in Burgundy (#710030)
+ * Handy-Style Smooth Toggle Switch in Blue (#2563eb)
  */
 const HandySwitch: React.FC<{
   checked: boolean;
@@ -87,7 +87,7 @@ const HandySwitch: React.FC<{
       />
       <div
         className={`w-11 h-6 rounded-full transition-colors duration-200 ease-in-out relative ${
-          checked ? 'bg-[#710030]' : 'bg-[#27272a]'
+          checked ? 'bg-[#2563eb]' : 'bg-[#27272a]'
         }`}
       >
         <span
@@ -294,7 +294,7 @@ type TabKey = 'general' | 'history' | 'advanced' | 'about';
 
 /**
  * Main Window: Handy-Style Sorted Two-Column Preferences Layout
- * Themed with shades of Burgundy (#710030)
+ * Themed with shades of Electric Blue (#2563eb)
  */
 export function App() {
   const isMiniPillWindow =
@@ -581,13 +581,13 @@ export function App() {
         {/* Left Sidebar (~200px) */}
         <aside className="w-52 bg-[#121214] border-r border-white/5 flex flex-col justify-between shrink-0 p-4">
           <div className="space-y-6">
-            {/* App Logo: Burgundy Bubbly Font */}
+            {/* App Logo: Blue Bubbly Font */}
             <div className="pt-2 px-2 flex items-center justify-between">
               <div className="relative">
-                <span className="text-2xl font-black tracking-tight text-[#b31b54] font-sans drop-shadow-[0_2px_10px_rgba(113,0,48,0.55)]">
+                <span className="text-2xl font-black tracking-tight text-[#3b82f6] font-sans drop-shadow-[0_2px_10px_rgba(37,99,235,0.55)]">
                   voxify
                 </span>
-                <span className="absolute -bottom-1 right-0 w-1.5 h-1.5 rounded-full bg-[#710030] ring-2 ring-[#121214]" />
+                <span className="absolute -bottom-1 right-0 w-1.5 h-1.5 rounded-full bg-[#2563eb] ring-2 ring-[#121214]" />
               </div>
             </div>
 
@@ -614,14 +614,14 @@ export function App() {
               </p>
             </div>
 
-            {/* Navigation Tabs in Burgundy */}
+            {/* Navigation Tabs in Blue */}
             <nav className="space-y-1">
               {/* General Tab */}
               <button
                 onClick={() => setActiveTab('general')}
                 className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   activeTab === 'general'
-                    ? 'bg-gradient-to-r from-[#710030] to-[#8b0a3e] text-white font-semibold shadow-md shadow-[#710030]/40 border border-[#b31b54]/30'
+                    ? 'bg-gradient-to-r from-[#1d4ed8] to-[#2563eb] text-white font-semibold shadow-md shadow-[#1d4ed8]/40 border border-[#3b82f6]/30'
                     : 'text-slate-400 hover:text-white hover:bg-white/5'
                 }`}
               >
@@ -634,7 +634,7 @@ export function App() {
                 onClick={() => setActiveTab('history')}
                 className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   activeTab === 'history'
-                    ? 'bg-gradient-to-r from-[#710030] to-[#8b0a3e] text-white font-semibold shadow-md shadow-[#710030]/40 border border-[#b31b54]/30'
+                    ? 'bg-gradient-to-r from-[#1d4ed8] to-[#2563eb] text-white font-semibold shadow-md shadow-[#1d4ed8]/40 border border-[#3b82f6]/30'
                     : 'text-slate-400 hover:text-white hover:bg-white/5'
                 }`}
               >
@@ -647,7 +647,7 @@ export function App() {
                 onClick={() => setActiveTab('advanced')}
                 className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   activeTab === 'advanced'
-                    ? 'bg-gradient-to-r from-[#710030] to-[#8b0a3e] text-white font-semibold shadow-md shadow-[#710030]/40 border border-[#b31b54]/30'
+                    ? 'bg-gradient-to-r from-[#1d4ed8] to-[#2563eb] text-white font-semibold shadow-md shadow-[#1d4ed8]/40 border border-[#3b82f6]/30'
                     : 'text-slate-400 hover:text-white hover:bg-white/5'
                 }`}
               >
@@ -660,7 +660,7 @@ export function App() {
                 onClick={() => setActiveTab('about')}
                 className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   activeTab === 'about'
-                    ? 'bg-gradient-to-r from-[#710030] to-[#8b0a3e] text-white font-semibold shadow-md shadow-[#710030]/40 border border-[#b31b54]/30'
+                    ? 'bg-gradient-to-r from-[#1d4ed8] to-[#2563eb] text-white font-semibold shadow-md shadow-[#1d4ed8]/40 border border-[#3b82f6]/30'
                     : 'text-slate-400 hover:text-white hover:bg-white/5'
                 }`}
               >
@@ -674,9 +674,9 @@ export function App() {
           <div className="pt-4 border-t border-white/5">
             <button
               onClick={handleTestAudioPill}
-              className="w-full py-2 px-3 rounded-xl bg-white/5 hover:bg-[#710030]/25 hover:border-[#710030]/40 text-xs text-slate-300 hover:text-white font-medium flex items-center justify-center gap-2 border border-white/5 transition-all active:scale-95"
+              className="w-full py-2 px-3 rounded-xl bg-white/5 hover:bg-[#2563eb]/25 hover:border-[#2563eb]/40 text-xs text-slate-300 hover:text-white font-medium flex items-center justify-center gap-2 border border-white/5 transition-all active:scale-95"
             >
-              <Zap className="w-3.5 h-3.5 text-[#b31b54]" />
+              <Zap className="w-3.5 h-3.5 text-[#3b82f6]" />
               <span>Test Audio Pill</span>
             </button>
           </div>
@@ -690,14 +690,14 @@ export function App() {
               {/* MASTER SERVICE HERO BANNER */}
               <div className={`p-4 rounded-2xl border transition-all shadow-lg ${
                 masterEnabled
-                  ? 'bg-gradient-to-r from-[#202024] via-[#26101c] to-[#1c0812] border-[#710030]/50 shadow-black/40'
+                  ? 'bg-gradient-to-r from-[#202024] via-[#0f1d36] to-[#0b1329] border-[#2563eb]/50 shadow-black/40'
                   : 'bg-[#202024] border-white/5'
               }`}>
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3.5">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all shrink-0 ${
                       masterEnabled
-                        ? 'bg-[#710030]/35 border-[#b31b54]/50 text-[#f075a4] shadow-[0_0_15px_rgba(113,0,48,0.45)]'
+                        ? 'bg-[#2563eb]/35 border-[#3b82f6]/50 text-[#93c5fd] shadow-[0_0_15px_rgba(37,99,235,0.45)]'
                         : 'bg-white/5 border-white/10 text-slate-500'
                     }`}>
                       <Power className="w-5 h-5" />
@@ -735,7 +735,7 @@ export function App() {
 
                 <div className="space-y-2">
                   {/* Row: Read Selection Shortcut */}
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-[#710030]/30 transition-colors">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-[#2563eb]/30 transition-colors">
                     <div className="flex items-center">
                       <span className="text-sm font-medium text-slate-200">
                         Read Selection Shortcut
@@ -747,8 +747,8 @@ export function App() {
                         onClick={() => setIsRecordingShortcut(true)}
                         className={`px-3 py-1 bg-[#151517] rounded-lg text-xs font-mono font-medium transition-all ${
                           isRecordingShortcut
-                            ? 'border border-[#d82d6f] text-[#f075a4] shadow-[0_0_10px_rgba(216,45,111,0.5)] animate-pulse'
-                            : 'border border-white/10 text-slate-200 hover:border-[#b31b54]/50 hover:text-white'
+                            ? 'border border-[#3b82f6] text-[#93c5fd] shadow-[0_0_10px_rgba(59,130,246,0.5)] animate-pulse'
+                            : 'border border-white/10 text-slate-200 hover:border-[#3b82f6]/50 hover:text-white'
                         }`}
                         title="Click to record new shortcut"
                       >
@@ -765,7 +765,7 @@ export function App() {
                   </div>
 
                   {/* Row: Stop Speech Shortcut */}
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-[#710030]/30 transition-colors">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-[#2563eb]/30 transition-colors">
                     <div className="flex items-center">
                       <span className="text-sm font-medium text-slate-200">
                         Stop Speech Shortcut
@@ -786,7 +786,7 @@ export function App() {
                   </div>
 
                   {/* Row: Auto-Read on Mouse Selection */}
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-[#710030]/30 transition-colors">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-[#2563eb]/30 transition-colors">
                     <div className="flex items-center">
                       <span className="text-sm font-medium text-slate-200">
                         Auto-Read on Selection
@@ -808,14 +808,14 @@ export function App() {
                 </h3>
 
                 <div className="space-y-2">
-                  {/* Row: Single Signature Voice (Sarah) in Burgundy */}
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-[#710030]/40 transition-colors">
+                  {/* Row: Single Signature Voice (Sarah) in Blue */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-[#2563eb]/40 transition-colors">
                     <div className="flex items-center">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-slate-200">
                           Neural Voice
                         </span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#710030]/25 text-[#e05589] font-semibold border border-[#710030]/40">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#2563eb]/25 text-[#93c5fd] font-semibold border border-[#2563eb]/40">
                           Sarah (Signature)
                         </span>
                       </div>
@@ -825,8 +825,8 @@ export function App() {
                       onClick={handleAuditionSarah}
                       className={`px-3 py-1.5 rounded-xl text-xs font-medium border flex items-center gap-1.5 transition-all ${
                         auditioningSarah
-                          ? 'bg-[#710030] text-white border-[#b31b54] shadow-sm shadow-[#710030]/50'
-                          : 'bg-[#151517] border-white/10 text-slate-300 hover:text-white hover:bg-[#710030]/20 hover:border-[#710030]/40'
+                          ? 'bg-[#2563eb] text-white border-[#3b82f6] shadow-sm shadow-[#2563eb]/50'
+                          : 'bg-[#151517] border-white/10 text-slate-300 hover:text-white hover:bg-[#2563eb]/20 hover:border-[#2563eb]/40'
                       }`}
                     >
                       {auditioningSarah ? (
@@ -836,7 +836,7 @@ export function App() {
                         </>
                       ) : (
                         <>
-                          <Play className="w-3 h-3 fill-current text-[#b31b54]" />
+                          <Play className="w-3 h-3 fill-current text-[#3b82f6]" />
                           <span>Preview Voice</span>
                         </>
                       )}
@@ -844,7 +844,7 @@ export function App() {
                   </div>
 
                   {/* Row: Audio Feedback (Earcon Chime) */}
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-[#710030]/30 transition-colors">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-[#2563eb]/30 transition-colors">
                     <div className="flex items-center">
                       <span className="text-sm font-medium text-slate-200">
                         Instant Selection Haptic Chime
@@ -852,7 +852,7 @@ export function App() {
                       <InfoTooltip text="Soft < 2ms acoustic feedback confirming text capture while the neural voice prepares." />
                       <button
                         onClick={handlePreviewEarcon}
-                        className="ml-3 text-[10px] text-[#b31b54] hover:underline font-medium"
+                        className="ml-3 text-[10px] text-[#3b82f6] hover:underline font-medium"
                       >
                         Preview
                       </button>
@@ -864,7 +864,7 @@ export function App() {
                   </div>
 
                   {/* Row: Selection Settle Delay */}
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-[#710030]/30 transition-colors">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#202024] border border-white/5 hover:border-[#2563eb]/30 transition-colors">
                     <div className="flex items-center">
                       <span className="text-sm font-medium text-slate-200">
                         Selection Settle Delay
@@ -879,7 +879,7 @@ export function App() {
                         step="5"
                         value={settleDelayMs}
                         onChange={(e) => handleSettleDelayChange(parseInt(e.target.value, 10))}
-                        className="w-28 h-1.5 bg-[#151517] rounded-lg appearance-none cursor-pointer accent-[#710030]"
+                        className="w-28 h-1.5 bg-[#151517] rounded-lg appearance-none cursor-pointer accent-[#2563eb]"
                       />
                       <span className="text-xs font-mono font-medium text-slate-400 w-12 text-right">
                         {settleDelayMs}ms
@@ -922,11 +922,11 @@ export function App() {
                   {history.map((item) => (
                     <div
                       key={item.id}
-                      className="p-3.5 rounded-xl bg-[#202024] border border-white/5 hover:border-[#710030]/30 transition-colors space-y-2"
+                      className="p-3.5 rounded-xl bg-[#202024] border border-white/5 hover:border-[#2563eb]/30 transition-colors space-y-2"
                     >
                       <div className="flex items-center justify-between text-xs text-slate-400">
                         <span className="font-medium text-slate-300 flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#710030]" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#2563eb]" />
                           Sarah • {item.wordCount} words
                         </span>
                         <span className="font-mono text-[11px]">{item.timestamp}</span>
@@ -937,7 +937,7 @@ export function App() {
                       <div className="flex items-center gap-2 pt-1">
                         <button
                           onClick={() => handleReReadHistoryItem(item)}
-                          className="px-2.5 py-1 rounded-lg bg-[#151517] hover:bg-[#710030] hover:text-white text-[11px] text-slate-300 border border-white/5 flex items-center gap-1.5 transition-colors"
+                          className="px-2.5 py-1 rounded-lg bg-[#151517] hover:bg-[#2563eb] hover:text-white text-[11px] text-slate-300 border border-white/5 flex items-center gap-1.5 transition-colors"
                         >
                           <Play className="w-2.5 h-2.5 fill-current" />
                           <span>Re-Read</span>
@@ -997,7 +997,7 @@ export function App() {
                       </span>
                       <InfoTooltip text="Locked to calibrated 1.0x natural speed to eliminate buffer drainage lag and guarantee glitch-free playback." />
                     </div>
-                    <span className="text-xs font-mono text-[#e05589] bg-[#710030]/20 border border-[#710030]/40 px-2 py-0.5 rounded-full font-bold">
+                    <span className="text-xs font-mono text-[#93c5fd] bg-[#2563eb]/20 border border-[#2563eb]/40 px-2 py-0.5 rounded-full font-bold">
                       1.00x Calibrated
                     </span>
                   </div>
@@ -1033,7 +1033,7 @@ export function App() {
                       </span>
                       <InfoTooltip text="Lead audio latency from text selection to speaker output." />
                     </div>
-                    <span className="text-xs font-mono text-[#e05589] bg-[#710030]/20 border border-[#710030]/40 px-2 py-0.5 rounded-full font-bold">
+                    <span className="text-xs font-mono text-[#93c5fd] bg-[#2563eb]/20 border border-[#2563eb]/40 px-2 py-0.5 rounded-full font-bold">
                       &lt; 35ms Playout
                     </span>
                   </div>
@@ -1047,7 +1047,7 @@ export function App() {
             <div className="max-w-2xl space-y-6 animate-in fade-in duration-150">
               <div className="p-6 rounded-2xl bg-[#202024] border border-white/5 space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#710030] via-[#8b0a3e] to-[#b31b54] flex items-center justify-center text-white shadow-lg shadow-[#710030]/40">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#1d4ed8] via-[#2563eb] to-[#3b82f6] flex items-center justify-center text-white shadow-lg shadow-[#1d4ed8]/40">
                     <Sparkles className="w-5 h-5" />
                   </div>
                   <div>
@@ -1069,7 +1069,7 @@ export function App() {
                   </div>
                   <div className="p-2.5 rounded-xl bg-[#151517] border border-white/5">
                     <span className="text-slate-500 block text-[10px] uppercase font-bold">Speed</span>
-                    <span className="text-[#e05589] font-medium font-mono">1.00x Natural Pace</span>
+                    <span className="text-[#93c5fd] font-medium font-mono">1.00x Natural Pace</span>
                   </div>
                   <div className="p-2.5 rounded-xl bg-[#151517] border border-white/5">
                     <span className="text-slate-500 block text-[10px] uppercase font-bold">Version</span>
@@ -1086,7 +1086,7 @@ export function App() {
                     href="https://github.com/sayan2302/voxify"
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#151517] hover:bg-[#710030]/25 text-xs text-slate-300 hover:text-white border border-white/5 hover:border-[#710030]/40 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#151517] hover:bg-[#2563eb]/25 text-xs text-slate-300 hover:text-white border border-white/5 hover:border-[#2563eb]/40 transition-colors"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                     <span>GitHub Repository</span>
@@ -1101,7 +1101,7 @@ export function App() {
       {/* Bottom Status Bar */}
       <footer className="h-8 bg-[#121214] border-t border-white/5 px-4 flex items-center justify-between text-[11px] text-slate-500 select-none shrink-0">
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-[#b31b54] animate-pulse" />
+          <span className="w-2 h-2 rounded-full bg-[#3b82f6] animate-pulse" />
           <span className="text-slate-400 font-medium">Kokoro-82M (Sarah) • 1.0x Calibrated</span>
         </div>
         <div className="flex items-center gap-3">

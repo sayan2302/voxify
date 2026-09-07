@@ -140,14 +140,14 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
 
         {/* Inner Capsule: Organic Water Droplet Shape -> Impact Squish -> Slow Expansion */}
         <div
-          className={`relative overflow-hidden rounded-full bg-[#130308] flex items-center justify-between select-none text-white cursor-default ${
+          className={`relative overflow-hidden rounded-full bg-[#080d1a] flex items-center justify-between select-none text-white cursor-default ${
             phase === 'compact' && !isSpeaking
-              ? 'animate-water-morph w-[118px] h-[38px] px-3 border border-white/20 shadow-[0_8px_24px_rgba(0,0,0,0.75),0_0_14px_rgba(113,0,48,0.35),inset_0_1px_2px_rgba(255,255,255,0.25)]'
+              ? 'animate-water-morph w-[118px] h-[38px] px-3 border border-white/20 shadow-[0_8px_24px_rgba(0,0,0,0.75),0_0_14px_rgba(37,99,235,0.35),inset_0_1px_2px_rgba(255,255,255,0.25)]'
               : phase === 'expanding' && !isSpeaking
-              ? 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[178px] h-[38px] px-3 border border-[#8b0a3e]/60 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_18px_rgba(179,27,84,0.35)]'
+              ? 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[178px] h-[38px] px-3 border border-[#2563eb]/60 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_18px_rgba(59,130,246,0.35)]'
               : isSpeaking
-              ? 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[152px] h-[38px] pl-[5px] pr-[7px] border border-[#b31b54]/60 shadow-[0_8px_30px_rgba(113,0,48,0.5),0_0_18px_rgba(179,27,84,0.35)]'
-              : 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[152px] h-[38px] pl-[5px] pr-[7px] border border-white/25 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_14px_rgba(113,0,48,0.25)]'
+              ? 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[152px] h-[38px] pl-[5px] pr-[7px] border border-[#3b82f6]/60 shadow-[0_8px_30px_rgba(29,78,216,0.5),0_0_18px_rgba(59,130,246,0.35)]'
+              : 'transition-[width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] w-[152px] h-[38px] pl-[5px] pr-[7px] border border-white/25 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_14px_rgba(37,99,235,0.25)]'
           }`}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={onMouseLeave}
@@ -161,7 +161,7 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
             /* Stage 1: Word Count & Duration Cognitive Anchor (4.0s) - Sequentially reveals after liquid forms */
             <div className="w-full flex items-center justify-center gap-2 animate-water-content relative z-10 px-1">
               <span className="relative flex h-2 w-2 shrink-0">
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#d82d6f] shadow-[0_0_8px_rgba(216,45,111,0.9)]" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#3b82f6] shadow-[0_0_8px_rgba(59,130,246,0.9)]" />
               </span>
               <span className="text-[12px] font-semibold tracking-wide text-slate-100 tabular-nums whitespace-nowrap">
                 {computedWordCount > 0 ? `${computedWordCount}w · ~${estimatedSeconds}s` : 'Reading'}
@@ -171,7 +171,7 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
             /* Stage 2: 'Almost ready...' with Animated Equalizer Bars */
             <div className="w-full flex items-center justify-between gap-2 h-full animate-pill-content px-1 relative z-10">
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#d82d6f] shadow-[0_0_6px_rgba(216,45,111,0.8)] shrink-0" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#3b82f6] shadow-[0_0_6px_rgba(59,130,246,0.8)] shrink-0" />
                 <span className="text-[11px] font-medium tracking-tight text-slate-200 truncate">
                   Almost ready...
                 </span>
@@ -180,7 +180,7 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
                 {[14, 20, 16, 22, 12, 18].map((h, idx) => (
                   <span
                     key={idx}
-                    className="w-1 rounded-full bg-gradient-to-t from-[#710030] via-[#b31b54] to-[#f075a4] animate-eq-bar"
+                    className="w-1 rounded-full bg-gradient-to-t from-[#1d4ed8] via-[#3b82f6] to-[#93c5fd] animate-eq-bar"
                     style={{
                       height: `${Math.round(h * 0.7)}px`,
                       animationDelay: `${idx * 110}ms`,
@@ -197,13 +197,13 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
                 onClick={onTogglePlay}
                 className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-150 active:scale-90 shrink-0 ${
                   isSpeaking
-                    ? 'bg-[#b31b54]/25 hover:bg-[#b31b54]/35 text-[#f075a4] border border-[#b31b54]/50 shadow-sm'
-                    : 'bg-[#710030] hover:bg-[#8b0a3e] text-white shadow-[0_0_14px_rgba(113,0,48,0.7)] ring-1 ring-[#b31b54]/50'
+                    ? 'bg-[#2563eb]/25 hover:bg-[#2563eb]/35 text-[#60a5fa] border border-[#3b82f6]/50 shadow-sm'
+                    : 'bg-[#2563eb] hover:bg-[#1d4ed8] text-white shadow-[0_0_14px_rgba(37,99,235,0.7)] ring-1 ring-[#60a5fa]/50'
                 }`}
-                title={isSpeaking ? 'Pause Speech' : 'Play Selection (Win+Alt+S)'}
+                title={isSpeaking ? 'Pause Speech' : 'Play Selection'}
               >
                 {isSpeaking ? (
-                  <Pause className="w-3.5 h-3.5 fill-[#f075a4]" />
+                  <Pause className="w-3.5 h-3.5 fill-[#60a5fa]" />
                 ) : (
                   <Play className="w-3.5 h-3.5 ml-0.5 fill-white" />
                 )}
@@ -217,7 +217,7 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
                     {[8, 14, 18, 13, 7].map((h, i) => (
                       <span
                         key={i}
-                        className="w-0.5 rounded-full bg-[#d82d6f] animate-soundwave shadow-[0_0_6px_rgba(216,45,111,0.7)]"
+                        className="w-0.5 rounded-full bg-[#3b82f6] animate-soundwave shadow-[0_0_6px_rgba(59,130,246,0.7)]"
                         style={{
                           height: `${h}px`,
                           animationDelay: `${i * 140}ms`,

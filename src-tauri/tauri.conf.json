@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Voxify",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "identifier": "com.voxify.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -14,11 +14,14 @@
       {
         "label": "main",
         "title": "Voxify",
-        "width": 780,
-        "height": 580,
-        "minWidth": 700,
-        "minHeight": 500,
-        "resizable": true,
+        "width": 860,
+        "height": 620,
+        "minWidth": 860,
+        "minHeight": 620,
+        "maxWidth": 860,
+        "maxHeight": 620,
+        "resizable": false,
+        "maximizable": false,
         "center": true,
         "decorations": true,
         "transparent": false

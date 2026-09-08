@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
 
 PackageIdentifier: sayan2302.Voxify
-PackageVersion: 1.0.1
+PackageVersion: 1.0.2
 InstallerType: nullsoft
 Scope: user
 InstallModes:
@@ -11,7 +11,7 @@ UpgradeBehavior: install
 ReleaseDate: 2026-09-08
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/sayan2302/voxify/releases/download/v1.0.1/Voxify_1.0.1_x64-setup.exe
+    InstallerUrl: https://github.com/sayan2302/voxify/releases/download/v1.0.2/Voxify_1.0.2_x64-setup.exe
     InstallerSha256: F3A24399EBDD790C20D1C8437990277650AAD075172251358EB95D4088F12055
 ManifestType: installer
 ManifestVersion: 1.6.0

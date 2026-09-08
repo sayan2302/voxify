@@ -46,16 +46,24 @@ if (-not $wv2Installed) {
 }
 
 # 3. Fetch Latest Release Information from GitHub
-$repo = "sayan2302/voxify"
-$releasesUrl = "https://api.github.com/repos/$repo/releases/latest"
+$distRepo = "sayan2302/voxify-app"
+$fallbackRepo = "sayan2302/voxify"
 
-Write-Host "[-] Connecting to GitHub ($repo)..." -ForegroundColor Gray
+Write-Host "[-] Connecting to GitHub Releases ($distRepo)..." -ForegroundColor Gray
+$release = $null
 try {
+    $releasesUrl = "https://api.github.com/repos/$distRepo/releases/latest"
     $release = Invoke-RestMethod -Uri $releasesUrl -Headers @{ "User-Agent" = "VoxifyInstaller" }
 } catch {
-    Write-Host "[x] Failed to reach GitHub Releases ($releasesUrl)." -ForegroundColor Red
-    Write-Host "    Please ensure your internet connection is active and the repository is public." -ForegroundColor Red
-    exit 1
+    # Fallback to primary repository if distribution repo is not yet populated
+    try {
+        $releasesUrl = "https://api.github.com/repos/$fallbackRepo/releases/latest"
+        $release = Invoke-RestMethod -Uri $releasesUrl -Headers @{ "User-Agent" = "VoxifyInstaller" }
+    } catch {
+        Write-Host "[x] Failed to reach GitHub Releases ($distRepo or $fallbackRepo)." -ForegroundColor Red
+        Write-Host "    Please ensure your internet connection is active." -ForegroundColor Red
+        exit 1
+    }
 }
 
 $version = $release.tag_name

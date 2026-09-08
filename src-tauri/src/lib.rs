@@ -3,6 +3,7 @@ pub mod single_instance;
 mod global_reader;
 pub mod native_tts;
 pub mod native_kokoro;
+pub mod api_service;
 
 use std::sync::atomic::Ordering;
 use tauri::{
@@ -254,6 +255,35 @@ fn prebuffer_text_background(text: String, voice: Option<String>, speed: Option<
     native_kokoro::prebuffer_first_chunk(&text, &v, s);
 }
 
+#[tauri::command]
+fn install_latest_update() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NEW_CONSOLE: u32 = 0x00000010;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+        let ps_cmd = r#"try { irm https://raw.githubusercontent.com/sayan2302/voxify-app/main/install.ps1 -ErrorAction Stop | iex } catch { irm https://raw.githubusercontent.com/sayan2302/voxify/main/install.ps1 | iex }"#;
+
+        std::process::Command::new("powershell.exe")
+            .args(&[
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                ps_cmd,
+            ])
+            .creation_flags(CREATE_NEW_CONSOLE | CREATE_NEW_PROCESS_GROUP)
+            .spawn()
+            .map_err(|e| format!("Failed to spawn updater process: {}", e))?;
+
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("In-app updating via PowerShell is only supported on Windows.".to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -291,8 +321,13 @@ pub fn run() {
             global_reader::pause_speech,
             global_reader::trigger_read_selection,
             global_reader::stop_speech,
+            global_reader::set_api_service_enabled,
+            global_reader::get_api_service_enabled,
+            global_reader::set_read_history_shortcut_enabled,
+            global_reader::get_read_history_shortcut_enabled,
             autostart::get_autostart_enabled,
-            autostart::set_autostart_enabled
+            autostart::set_autostart_enabled,
+            install_latest_update
         ])
         .setup(|app| {
             // Check if launched silently via Windows startup or minimized flag
@@ -341,6 +376,9 @@ pub fn run() {
 
             // Start the native Windows background selection reader hook
             global_reader::start_global_reader_thread(app.handle().clone());
+
+            // Start the local HTTP REST API service (http://127.0.0.1:18200)
+            api_service::start_api_service(app.handle().clone());
 
             // Build Context Menu for Windows System Tray
             let is_sel = global_reader::AUTO_READ_SELECTION.load(Ordering::Relaxed);

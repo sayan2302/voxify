@@ -201,35 +201,66 @@ impl AudioPlayer {
     }
 }
 
-/// Generates a subtle, luxurious, 75ms acoustic dual-tone earcon chime (E5 -> B5) in memory (< 0.05ms)
+/// Generates a smooth, natural acoustic dual-tone crystal chime (E5 -> B5) with polyphonic resonance (< 0.05ms)
 pub fn generate_earcon_samples() -> Vec<f32> {
     let sample_rate = 24000.0;
-    let total_samples = (sample_rate * 0.075) as usize; // 75ms total
+    let duration = 0.18; // 180ms natural acoustic decay
+    let total_samples = (sample_rate * duration) as usize;
     let mut samples = Vec::with_capacity(total_samples);
 
-    let n1 = (sample_rate * 0.030) as usize; // first note: 30ms
     let f1 = 659.25; // E5
     let f2 = 987.77; // B5
+    let offset2 = 0.032; // Note 2 enters 32ms later, resonating in harmony
 
     for i in 0..total_samples {
         let t = i as f32 / sample_rate;
-        let (freq, note_t) = if i < n1 {
-            (f1, t)
+
+        // Note 1: E5 struck at t=0
+        let t1 = t;
+        let attack1 = if t1 < 0.005 {
+            (t1 / 0.005 * std::f32::consts::FRAC_PI_2).sin()
         } else {
-            (f2, (i - n1) as f32 / sample_rate)
+            1.0
+        };
+        let decay1_fund = (-t1 * 11.5).exp();
+        let decay1_harm = (-t1 * 24.0).exp();
+        let decay1_ting = (-t1 * 45.0).exp();
+
+        let note1 = ((2.0 * std::f32::consts::PI * f1 * t1).sin() * 0.70 * decay1_fund
+                   + (4.0 * std::f32::consts::PI * f1 * t1).sin() * 0.20 * decay1_harm
+                   + (2.0 * std::f32::consts::PI * f1 * 2.756 * t1).sin() * 0.08 * decay1_harm
+                   + (2.0 * std::f32::consts::PI * f1 * 4.2 * t1).sin() * 0.02 * decay1_ting) * attack1;
+
+        // Note 2: B5 struck gently at t=32ms, overlapping and harmonizing
+        let note2 = if t >= offset2 {
+            let t2 = t - offset2;
+            let attack2 = if t2 < 0.006 {
+                (t2 / 0.006 * std::f32::consts::FRAC_PI_2).sin()
+            } else {
+                1.0
+            };
+            let decay2_fund = (-t2 * 13.0).exp();
+            let decay2_harm = (-t2 * 26.0).exp();
+            let decay2_ting = (-t2 * 50.0).exp();
+
+            ((2.0 * std::f32::consts::PI * f2 * t2).sin() * 0.65 * decay2_fund
+           + (4.0 * std::f32::consts::PI * f2 * t2).sin() * 0.18 * decay2_harm
+           + (2.0 * std::f32::consts::PI * f2 * 2.756 * t2).sin() * 0.06 * decay2_harm
+           + (2.0 * std::f32::consts::PI * f2 * 4.2 * t2).sin() * 0.02 * decay2_ting) * attack2
+        } else {
+            0.0
         };
 
-        // Smooth cosine attack (4ms) to eliminate any pop or click
-        let attack = if note_t < 0.004 { (note_t / 0.004 * std::f32::consts::FRAC_PI_2).sin() } else { 1.0 };
-        // Gentle exponential decay
-        let decay = (-note_t * 40.0).exp();
-        let env = attack * decay;
+        // Smooth master tail fade (last 20ms) to ensure absolute silence at the end
+        let tail_fade = if t > (duration - 0.020) {
+            let rem = (duration - t) / 0.020;
+            (rem * std::f32::consts::FRAC_PI_2).sin().clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
 
-        // Fundamental sine wave + subtle harmonic overtone for warmth
-        let val = (2.0 * std::f32::consts::PI * freq * t).sin() * 0.75
-                + (4.0 * std::f32::consts::PI * freq * t).sin() * 0.25;
-
-        samples.push(val * env);
+        let mixed = (note1 * 0.55 + note2 * 0.45) * tail_fade * 0.75;
+        samples.push(mixed);
     }
     samples
 }

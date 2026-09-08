@@ -9,6 +9,8 @@ pub static AUTO_COPY_SELECTION: AtomicBool = AtomicBool::new(false);
 pub static AUTO_READ_COPY: AtomicBool = AtomicBool::new(false);
 pub static SETTLE_DELAY_MS: AtomicU32 = AtomicU32::new(10);
 pub static EARCON_ENABLED: AtomicBool = AtomicBool::new(true);
+pub static API_SERVICE_ENABLED: AtomicBool = AtomicBool::new(true);
+pub static READ_HISTORY_SHORTCUT_ENABLED: AtomicBool = AtomicBool::new(true);
 static IS_SIMULATING_COPY: AtomicBool = AtomicBool::new(false);
 static WORKER_THREAD_ID: AtomicU32 = AtomicU32::new(0);
 static CURRENT_SHORTCUT: Mutex<String> = Mutex::new(String::new());
@@ -21,6 +23,10 @@ static CURRENT_SELECTION_TEXT: Mutex<Option<String>> = Mutex::new(None);
 static SELECTION_SEQUENCE: AtomicU32 = AtomicU32::new(0);
 static APP_HANDLE_STORAGE: Mutex<Option<AppHandle>> = Mutex::new(None);
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AutoReadConfig {
     pub master_enabled: bool,
@@ -30,6 +36,10 @@ pub struct AutoReadConfig {
     pub activation_shortcut: String,
     pub settle_delay_ms: u32,
     pub earcon_enabled: bool,
+    #[serde(default = "default_true")]
+    pub api_service_enabled: bool,
+    #[serde(default = "default_true")]
+    pub read_history_shortcut_enabled: bool,
 }
 
 impl Default for AutoReadConfig {
@@ -42,6 +52,8 @@ impl Default for AutoReadConfig {
             activation_shortcut: "Win + Alt + S".to_string(),
             settle_delay_ms: 10,
             earcon_enabled: true,
+            api_service_enabled: true,
+            read_history_shortcut_enabled: true,
         }
     }
 }
@@ -113,6 +125,7 @@ mod win32 {
     pub const WM_USER_UPDATE_HOTKEY: u32 = 0x0400 + 102;
     pub const WM_USER_ACTIVATION_SHORTCUT: u32 = 0x0400 + 103;
     pub const WM_USER_STOP_SHORTCUT: u32 = 0x0400 + 104;
+    pub const WM_USER_READ_HISTORY_SHORTCUT: u32 = 0x0400 + 105;
     pub const CF_UNICODETEXT: u32 = 13;
 
     pub const MOD_ALT: u32 = 0x0001;
@@ -126,6 +139,7 @@ mod win32 {
     pub const VK_MENU: u8 = 0x12; // Alt key
     pub const VK_SPACE: u8 = 0x20;
     pub const VK_C: u8 = 0x43;
+    pub const VK_H: u8 = 0x48;
     pub const VK_X: u8 = 0x58;
     pub const VK_LWIN: u8 = 0x5B;
     pub const VK_RWIN: u8 = 0x5C;
@@ -286,6 +300,21 @@ mod win32 {
                         PostThreadMessageW(thread_id, WM_USER_STOP_SHORTCUT, 0, 0);
                     }
                     return 1;
+                }
+
+                // 2. Re-Read Last History Item: Win + Alt + H (or Ctrl + Alt + H fallback)
+                let is_h = hook_struct.vk_code == (VK_H as u32);
+                if is_h && ((win_down && alt_down && !ctrl_down && !shift_down) || (ctrl_down && alt_down && !win_down && !shift_down)) {
+                    if READ_HISTORY_SHORTCUT_ENABLED.load(Ordering::Relaxed) && MASTER_SERVICE_ENABLED.load(Ordering::Relaxed) {
+                        keybd_event(0xE8, 0, 0, 0);
+                        keybd_event(0xE8, 0, KEYEVENTF_KEYUP, 0);
+
+                        let thread_id = WORKER_THREAD_ID.load(Ordering::Relaxed);
+                        if thread_id != 0 {
+                            PostThreadMessageW(thread_id, WM_USER_READ_HISTORY_SHORTCUT, 0, 0);
+                        }
+                        return 1;
+                    }
                 }
 
                 // 2. Configured Activation Shortcut (e.g. Win + Alt + S)
@@ -578,6 +607,8 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
             AUTO_READ_COPY.store(saved_cfg.auto_read_copy, Ordering::SeqCst);
             SETTLE_DELAY_MS.store(saved_cfg.settle_delay_ms, Ordering::SeqCst);
             EARCON_ENABLED.store(saved_cfg.earcon_enabled, Ordering::SeqCst);
+            API_SERVICE_ENABLED.store(saved_cfg.api_service_enabled, Ordering::SeqCst);
+            READ_HISTORY_SHORTCUT_ENABLED.store(saved_cfg.read_history_shortcut_enabled, Ordering::SeqCst);
 
             let initial_sc = if !saved_cfg.activation_shortcut.trim().is_empty() {
                 saved_cfg.activation_shortcut
@@ -809,6 +840,9 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
                 } else if msg.message == WM_USER_STOP_SHORTCUT || (msg.message == WM_HOTKEY && (msg.w_param == 3 || msg.w_param == 4)) {
                     println!("[GlobalReader] Master Kill Switch (Win + Alt + X) triggered! Halting speech, purging pipeline & hiding audio pill.");
                     stop_all_speech(&app_handle);
+                } else if msg.message == WM_USER_READ_HISTORY_SHORTCUT {
+                    println!("[GlobalReader] Re-Read Last History Shortcut (Win + Alt + H) triggered!");
+                    let _ = app_handle.emit("trigger-read-last-history", ());
                 } else if msg.message == WM_CLIPBOARDUPDATE {
                     if IS_SIMULATING_COPY.load(Ordering::SeqCst) {
                         // Ignore our own simulated copy
@@ -857,6 +891,8 @@ pub fn get_auto_read_config() -> AutoReadConfig {
         activation_shortcut: current_sc,
         settle_delay_ms: SETTLE_DELAY_MS.load(Ordering::Relaxed),
         earcon_enabled: EARCON_ENABLED.load(Ordering::Relaxed),
+        api_service_enabled: API_SERVICE_ENABLED.load(Ordering::Relaxed),
+        read_history_shortcut_enabled: READ_HISTORY_SHORTCUT_ENABLED.load(Ordering::Relaxed),
     }
 }
 
@@ -992,8 +1028,291 @@ pub fn stop_speech(app_handle: AppHandle) {
     stop_all_speech(&app_handle);
 }
 
+#[tauri::command]
+pub fn set_api_service_enabled(enabled: bool) {
+    API_SERVICE_ENABLED.store(enabled, Ordering::Relaxed);
+    persist_current_config();
+}
+
+#[tauri::command]
+pub fn get_api_service_enabled() -> bool {
+    API_SERVICE_ENABLED.load(Ordering::Relaxed)
+}
+
+#[tauri::command]
+pub fn set_read_history_shortcut_enabled(enabled: bool) {
+    READ_HISTORY_SHORTCUT_ENABLED.store(enabled, Ordering::Relaxed);
+    persist_current_config();
+}
+
+#[tauri::command]
+pub fn get_read_history_shortcut_enabled() -> bool {
+    READ_HISTORY_SHORTCUT_ENABLED.load(Ordering::Relaxed)
+}
+
 pub fn set_current_selection_text(text: String) {
     if let Ok(mut current) = CURRENT_SELECTION_TEXT.lock() {
         *current = Some(text);
     }
 }
+
+/// Strip Markdown formatting into natural, spoken English prose for neural TTS.
+pub fn strip_markdown_for_speech(raw: &str) -> String {
+    let mut text = raw.trim();
+
+    // 1. Strip YAML frontmatter at start
+    if text.starts_with("---") {
+        if let Some(rest) = text.strip_prefix("---") {
+            if let Some(end_idx) = rest.find("\n---") {
+                text = rest[end_idx + 4..].trim_start_matches(|c| c == '\r' || c == '\n' || c == ' ');
+            }
+        }
+    }
+
+    let mut result = String::with_capacity(text.len());
+    let mut in_code_block = false;
+
+    for line in text.lines() {
+        let trimmed = line.trim();
+
+        // Multi-line code fence: ``` or ~~~
+        if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+            in_code_block = !in_code_block;
+            if !in_code_block && !result.is_empty() && !result.ends_with('\n') {
+                result.push('\n');
+            }
+            continue;
+        }
+
+        if in_code_block {
+            continue;
+        }
+
+        // Horizontal rules
+        if trimmed == "---" || trimmed == "***" || trimmed == "___" || trimmed == "- - -" {
+            continue;
+        }
+
+        // Heading tokens
+        let mut clean_line = trimmed;
+        let is_heading = clean_line.starts_with('#');
+        if is_heading {
+            clean_line = clean_line.trim_start_matches('#').trim_start();
+        }
+
+        // Blockquotes
+        while clean_line.starts_with('>') {
+            clean_line = clean_line.trim_start_matches('>').trim_start();
+        }
+
+        // List bullets
+        if let Some(stripped) = clean_line.strip_prefix("- ")
+            .or_else(|| clean_line.strip_prefix("* "))
+            .or_else(|| clean_line.strip_prefix("+ ")) {
+            clean_line = stripped.trim_start();
+        } else if let Some(dot_pos) = clean_line.find(". ") {
+            if dot_pos > 0 && clean_line[..dot_pos].chars().all(|c| c.is_ascii_digit()) {
+                clean_line = clean_line[dot_pos + 2..].trim_start();
+            }
+        }
+
+        if clean_line.is_empty() {
+            if !result.ends_with("\n\n") {
+                result.push('\n');
+            }
+            continue;
+        }
+
+        let processed = process_inline_markdown(clean_line);
+        if !processed.is_empty() {
+            if !result.is_empty() && !result.ends_with('\n') && !result.ends_with(' ') {
+                result.push(' ');
+            }
+            result.push_str(&processed);
+
+            if is_heading && !processed.ends_with('.') && !processed.ends_with('!') && !processed.ends_with('?') && !processed.ends_with(':') {
+                result.push('.');
+            }
+            result.push('\n');
+        }
+    }
+
+    result.trim().to_string()
+}
+
+fn process_inline_markdown(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let chars: Vec<char> = input.chars().collect();
+    let len = chars.len();
+    let mut i = 0;
+
+    while i < len {
+        // Image: ![alt](url) -> omitted
+        if chars[i] == '!' && i + 1 < len && chars[i + 1] == '[' {
+            if let Some(close_bracket) = chars[i..].iter().position(|&c| c == ']') {
+                let after_bracket = i + close_bracket + 1;
+                if after_bracket < len && chars[after_bracket] == '(' {
+                    if let Some(close_paren) = chars[after_bracket..].iter().position(|&c| c == ')') {
+                        i = after_bracket + close_paren + 1;
+                        continue;
+                    }
+                }
+            }
+        }
+
+        // Link: [anchor](url) -> anchor
+        if chars[i] == '[' {
+            if let Some(close_bracket) = chars[i + 1..].iter().position(|&c| c == ']') {
+                let bracket_end = i + 1 + close_bracket;
+                let text_inside: String = chars[i + 1..bracket_end].iter().collect();
+                let after_bracket = bracket_end + 1;
+                if after_bracket < len && chars[after_bracket] == '(' {
+                    if let Some(close_paren) = chars[after_bracket..].iter().position(|&c| c == ')') {
+                        out.push_str(&process_inline_markdown(&text_inside));
+                        i = after_bracket + close_paren + 1;
+                        continue;
+                    }
+                }
+            }
+        }
+
+        // HTML tag: <tag> -> stripped
+        if chars[i] == '<' {
+            if let Some(close_tag) = chars[i + 1..].iter().position(|&c| c == '>') {
+                let tag_str: String = chars[i + 1..i + 1 + close_tag].iter().collect();
+                if tag_str.starts_with('/') || tag_str.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false) {
+                    i = i + 1 + close_tag + 1;
+                    continue;
+                }
+            }
+        }
+
+        // Inline code: `code` -> code
+        if chars[i] == '`' {
+            i += 1;
+            continue;
+        }
+
+        // Bold / Italics: **, *, __, _, ~~
+        if chars[i] == '*' || chars[i] == '_' || chars[i] == '~' {
+            let marker = chars[i];
+            let is_double = i + 1 < len && chars[i + 1] == marker;
+            i += if is_double { 2 } else { 1 };
+            continue;
+        }
+
+        out.push(chars[i]);
+        i += 1;
+    }
+
+    collapse_whitespace(&out)
+}
+
+fn collapse_whitespace(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut last_was_space = false;
+    for c in s.chars() {
+        if c == ' ' || c == '\t' {
+            if !last_was_space {
+                result.push(' ');
+                last_was_space = true;
+            }
+        } else {
+            result.push(c);
+            last_was_space = false;
+        }
+    }
+    result.trim().to_string()
+}
+
+/// Ingest external raw Markdown, strip formatting, summon the Audio Pill,
+/// and immediately begin reading aloud without requiring any hotkey activation.
+/// Returns (word_count, estimated_seconds).
+pub fn handle_direct_text(app_handle: &AppHandle, raw_markdown: &str) -> (usize, u32) {
+    let clean_text = strip_markdown_for_speech(raw_markdown);
+    if clean_text.is_empty() {
+        return (0, 0);
+    }
+
+    let word_count = clean_text.split_whitespace().count();
+    let estimated_seconds = ((word_count as f32 / 2.5).ceil() as u32).max(1);
+
+    // 1. Interrupt any current playback and clear last read state
+    let _ = crate::native_kokoro::stop();
+    let _ = crate::native_tts::stop();
+
+    let _seq = SELECTION_SEQUENCE.fetch_add(1, Ordering::SeqCst) + 1;
+    {
+        let mut current = CURRENT_SELECTION_TEXT.lock().unwrap();
+        *current = Some(clean_text.clone());
+    }
+    if let Ok(mut last) = LAST_READ_TEXT.lock() {
+        *last = Some(clean_text.clone());
+    }
+
+    let voice_name = crate::native_kokoro::get_current_voice_name();
+    let speed = crate::native_kokoro::get_current_speed();
+
+    // 2. Summon Floating Audio Pill with staging information
+    let _ = app_handle.emit("global-hud-status", serde_json::json!({
+        "status": "staging",
+        "text": clean_text.clone(),
+        "voiceName": voice_name,
+        "speed": speed,
+        "wordCount": word_count,
+    }));
+    let _ = app_handle.emit("global-selection-text", clean_text.clone());
+    crate::show_or_focus_hud(app_handle);
+
+    // Pre-buffer first chunk immediately
+    crate::native_kokoro::prebuffer_first_chunk(&clean_text, &voice_name, speed);
+
+    // 3. Immediately start speaking in background without user interaction
+    let app_h = app_handle.clone();
+    std::thread::spawn(move || {
+        // Small delay to allow frontend staging animation to mount cleanly
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        play_current_selection(&app_h);
+    });
+
+    (word_count, estimated_seconds)
+}
+
+#[cfg(test)]
+mod markdown_tests {
+    use super::*;
+
+    #[test]
+    fn test_strip_markdown_frontmatter() {
+        let md = "---\ntitle: Document\nauthor: Sayan\n---\n# Real Title\nThis is body text.";
+        let clean = strip_markdown_for_speech(md);
+        assert!(clean.starts_with("Real Title."));
+        assert!(clean.contains("This is body text."));
+        assert!(!clean.contains("author: Sayan"));
+    }
+
+    #[test]
+    fn test_strip_code_blocks() {
+        let md = "Here is an explanation:\n```python\ndef hello():\n    print('world')\n```\nAnd here is more prose.";
+        let clean = strip_markdown_for_speech(md);
+        assert!(clean.contains("Here is an explanation:"));
+        assert!(clean.contains("And here is more prose."));
+        assert!(!clean.contains("def hello"));
+        assert!(!clean.contains("print"));
+    }
+
+    #[test]
+    fn test_strip_links_and_formatting() {
+        let md = "Please visit [our website](https://example.com) for **important** updates!";
+        let clean = strip_markdown_for_speech(md);
+        assert_eq!(clean, "Please visit our website for important updates!");
+    }
+
+    #[test]
+    fn test_strip_images() {
+        let md = "Look at this ![Logo](https://example.com/logo.png) diagram.";
+        let clean = strip_markdown_for_speech(md);
+        assert_eq!(clean, "Look at this diagram.");
+    }
+}
+

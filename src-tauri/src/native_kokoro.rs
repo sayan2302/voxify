@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use sherpa_onnx::{OfflineTts, OfflineTtsConfig, OfflineTtsKokoroModelConfig, OfflineTtsModelConfig};
 use tauri::Emitter;
@@ -12,6 +12,9 @@ pub fn set_app_handle(app: tauri::AppHandle) {
         *guard = Some(app);
     }
 }
+
+static IS_INITIALIZING: AtomicBool = AtomicBool::new(false);
+static IS_READY: AtomicBool = AtomicBool::new(false);
 
 static TTS_ENGINES: Mutex<Vec<std::sync::Arc<Mutex<OfflineTts>>>> = Mutex::new(Vec::new());
 static AUDIO_PLAYER: Mutex<Option<AudioPlayer>> = Mutex::new(None);
@@ -383,12 +386,27 @@ pub fn get_default_model_dir() -> PathBuf {
 
 /// Initialize the native Kokoro engine with multi-threaded ONNX Runtime
 pub fn init(model_dir: Option<&Path>) -> Result<(), String> {
+    if IS_READY.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+
+    if IS_INITIALIZING.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+        // Another thread is already actively initializing Kokoro; wait for completion
+        while IS_INITIALIZING.load(Ordering::SeqCst) {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        if IS_READY.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+    }
+
     let dir = match model_dir {
         Some(p) => p.to_path_buf(),
         None => get_default_model_dir(),
     };
 
     if !dir.exists() {
+        IS_INITIALIZING.store(false, Ordering::SeqCst);
         return Err(format!("Kokoro model directory not found at {:?}", dir));
     }
 
@@ -398,6 +416,7 @@ pub fn init(model_dir: Option<&Path>) -> Result<(), String> {
     let data_dir = dir.join("espeak-ng-data");
 
     if !model_path.exists() || !voices_path.exists() || !tokens_path.exists() || !data_dir.exists() {
+        IS_INITIALIZING.store(false, Ordering::SeqCst);
         return Err(format!("Missing required Kokoro model assets in {:?}", dir));
     }
 
@@ -480,6 +499,8 @@ pub fn init(model_dir: Option<&Path>) -> Result<(), String> {
     }
 
     println!("[NativeKokoro] Kokoro-82M native speech engine ready!");
+    IS_READY.store(true, Ordering::SeqCst);
+    IS_INITIALIZING.store(false, Ordering::SeqCst);
     Ok(())
 }
 

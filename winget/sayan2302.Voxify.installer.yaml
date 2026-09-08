@@ -12,6 +12,6 @@ ReleaseDate: 2026-09-08
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/sayan2302/voxify/releases/download/v1.0.2/Voxify_1.0.2_x64-setup.exe
-    InstallerSha256: F3A24399EBDD790C20D1C8437990277650AAD075172251358EB95D4088F12055
+    InstallerSha256: A4E9B07CFB2B8B3EB3E7624AC09C119390E8C50B141C801D3CDC63BCE5E21148
 ManifestType: installer
 ManifestVersion: 1.6.0

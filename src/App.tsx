@@ -577,7 +577,6 @@ export function App() {
     }
   });
   const [copiedCurl, setCopiedCurl] = useState<boolean>(false);
-  const [copiedAboutCurl, setCopiedAboutCurl] = useState<boolean>(false);
 
   const handleToggleApiService = (enabled: boolean) => {
     setApiServiceEnabled(enabled);
@@ -1728,28 +1727,6 @@ export function App() {
                 <p className="relative text-xs text-slate-300 leading-relaxed max-w-2xl font-normal">
                   Your screen, whispered into reality. Silky, human-grade vocal synthesis crafted to run purely on your silicon—zero latency, zero cloud leaks, and effortless sensory harmony.
                 </p>
-
-                {/* Streamlined Ingress Bar */}
-                <div className="relative pt-2.5 border-t border-white/10 flex items-center justify-between gap-2.5 bg-black/30 px-3 py-2 rounded-xl border border-white/5">
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] animate-pulse" />
-                    <span className="text-slate-400 font-medium">Local REST Stream:</span>
-                    <span className="font-mono text-slate-200 text-[11px]">
-                      127.0.0.1:18200/api/read
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText('curl.exe -s -X POST "http://127.0.0.1:18200/api/read" -H "Content-Type: text/plain; charset=utf-8" -d "Hello! Your speech is playing."');
-                      setCopiedAboutCurl(true);
-                      setTimeout(() => setCopiedAboutCurl(false), 2000);
-                    }}
-                    className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-[#2563eb]/20 text-slate-300 hover:text-white border border-white/10 text-[11px] font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    {copiedAboutCurl ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-slate-400" />}
-                    <span>{copiedAboutCurl ? 'Copied' : 'Copy Ingress'}</span>
-                  </button>
-                </div>
               </div>
 
               {/* 6 BENTO CARDS: SHORT, SEXY, PUNCHY */}

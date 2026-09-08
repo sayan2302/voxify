@@ -1446,7 +1446,12 @@ pub fn speak(text: &str, voice_name: &str, speed: f32) -> Result<(), String> {
 
     // Immediately halt and empty any existing audio sink playback (< 0.1ms)
     // so previous audio never continues draining or clashing with new speech!
-    if let Ok(player_guard) = AUDIO_PLAYER.lock() {
+    if let Ok(mut player_guard) = AUDIO_PLAYER.lock() {
+        if player_guard.is_none() {
+            if let Ok(new_player) = AudioPlayer::new() {
+                *player_guard = Some(new_player);
+            }
+        }
         if let Some(ref player) = *player_guard {
             player.stop();
         }
@@ -1587,7 +1592,12 @@ pub fn speak(text: &str, voice_name: &str, speed: f32) -> Result<(), String> {
             }
         }
 
-        if let Ok(player_guard) = AUDIO_PLAYER.lock() {
+        if let Ok(mut player_guard) = AUDIO_PLAYER.lock() {
+            if player_guard.is_none() {
+                if let Ok(new_player) = AudioPlayer::new() {
+                    *player_guard = Some(new_player);
+                }
+            }
             if let Some(ref player) = *player_guard {
                 player.set_speed(speed);
                 if !initial_played {

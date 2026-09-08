@@ -499,7 +499,7 @@ interface UpdateState {
   errorMessage?: string;
 }
 
-const CURRENT_APP_VERSION = '1.0.3';
+const CURRENT_APP_VERSION = '1.0.4';
 const REPO_OWNER = 'sayan2302';
 const DISTRIBUTION_REPO = 'voxify-app';
 const FALLBACK_REPO = 'voxify';
@@ -1449,8 +1449,14 @@ export function App() {
                       </span>
                       <InfoTooltip text="Global hotkey to capture highlighted text and summon the floating audio pill." />
                     </div>
-                    <div className="px-3 py-1 bg-[#151517] border border-white/10 rounded-lg text-xs font-mono font-medium text-slate-200">
-                      Win + Alt + S
+                    <div className="flex items-center gap-1.5">
+                      <div className="px-2.5 py-1 bg-[#151517] border border-white/10 rounded-lg text-xs font-mono font-medium text-slate-200">
+                        Win + Alt + S
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-medium">or</span>
+                      <div className="px-2.5 py-1 bg-[#151517] border border-white/10 rounded-lg text-xs font-mono font-medium text-slate-400">
+                        Ctrl + Alt + S
+                      </div>
                     </div>
                   </div>
 

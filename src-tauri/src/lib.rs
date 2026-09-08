@@ -421,7 +421,7 @@ pub fn run() {
             let read_now_item = MenuItem::with_id(
                 app,
                 "read_selection",
-                "⚡ Read Current Selection (Ctrl+Shift+Space)",
+                "⚡ Read Current Selection (Win+Alt+S / Ctrl+Alt+S)",
                 true,
                 None::<&str>
             )?;

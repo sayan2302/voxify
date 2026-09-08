@@ -242,6 +242,7 @@ mod win32 {
             lpParam: *mut std::ffi::c_void,
         ) -> HWND;
         pub fn DefWindowProcW(hWnd: HWND, Msg: u32, wParam: WPARAM, lParam: LPARAM) -> LRESULT;
+        pub fn GetModuleHandleW(lpModuleName: *const u16) -> HINSTANCE;
         pub fn DestroyWindow(hWnd: HWND) -> BOOL;
     }
 
@@ -346,6 +347,16 @@ mod win32 {
                         // Return 1 to consume the key: Windows language switcher or default shell actions will NOT trigger!
                         return 1;
                     }
+                }
+
+                // Companion fallback activation shortcut: Ctrl + Alt + S
+                let is_s = hook_struct.vk_code == (VK_C as u32 + 16); // 0x53 = 'S'
+                if is_s && ctrl_down && alt_down && !win_down && !shift_down {
+                    let thread_id = WORKER_THREAD_ID.load(Ordering::Relaxed);
+                    if thread_id != 0 {
+                        PostThreadMessageW(thread_id, WM_USER_ACTIVATION_SHORTCUT, 0, 0);
+                    }
+                    return 1;
                 }
             }
         }
@@ -696,14 +707,23 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
                 null_mut(),
             );
 
+            // Check if launched silently via Windows startup or minimized flag
+            let is_silent_start = std::env::args().any(|arg| arg == "--autostart" || arg == "--minimized" || arg == "--tray");
+            if is_silent_start {
+                // Settle delay on boot so the interactive user desktop and message subsystem are ready
+                Sleep(1500);
+            }
+
+            let h_mod = GetModuleHandleW(null_mut());
+
             // Install low-level mouse hook
-            let mouse_hook = SetWindowsHookExW(WH_MOUSE_LL, mouse_hook_proc, null_mut(), 0);
+            let mouse_hook = SetWindowsHookExW(WH_MOUSE_LL, mouse_hook_proc, h_mod, 0);
             if mouse_hook.is_null() {
                 eprintln!("Failed to install low-level mouse hook for Voxify global reader");
             }
 
             // Install low-level keyboard hook (captures Win + Space and custom Win shortcuts without Windows shell interference)
-            let kbd_hook = SetWindowsHookExW(WH_KEYBOARD_LL, keyboard_hook_proc, null_mut(), 0);
+            let kbd_hook = SetWindowsHookExW(WH_KEYBOARD_LL, keyboard_hook_proc, h_mod, 0);
             if kbd_hook.is_null() {
                 eprintln!("Failed to install low-level keyboard hook for Voxify global reader");
             }
@@ -718,12 +738,12 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
                 parsed
             };
             if MASTER_SERVICE_ENABLED.load(Ordering::Relaxed) {
-                if (init_mods & MOD_WIN) == 0 {
-                    let reg_ok = RegisterHotKey(hwnd, 1, init_mods, init_vk);
-                    println!("[GlobalReader] Registered activation shortcut '{}' (success: {})", *CURRENT_SHORTCUT.lock().unwrap(), reg_ok != 0);
-                } else {
-                    println!("[GlobalReader] Activation shortcut uses Win key ('{}'), handled via WH_KEYBOARD_LL hook", *CURRENT_SHORTCUT.lock().unwrap());
-                }
+                let reg_ok = RegisterHotKey(hwnd, 1, init_mods, init_vk);
+                println!("[GlobalReader] Registered kernel activation shortcut '{}' (success: {})", *CURRENT_SHORTCUT.lock().unwrap(), reg_ok != 0);
+
+                // ID 2: Companion fallback shortcut: Ctrl + Alt + S
+                let fallback_ok = RegisterHotKey(hwnd, 2, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 0x53);
+                println!("[GlobalReader] Registered companion hotkey 'Ctrl + Alt + S' (success: {})", fallback_ok != 0);
             } else {
                 println!("[GlobalReader] Master switch is OFF on launch; activation shortcut not registered to hotkey");
             }
@@ -755,17 +775,15 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
 
                 if msg.message == WM_USER_UPDATE_HOTKEY {
                     UnregisterHotKey(hwnd, 1);
+                    UnregisterHotKey(hwnd, 2);
                     if MASTER_SERVICE_ENABLED.load(Ordering::Relaxed) {
                         let sc = CURRENT_SHORTCUT.lock().unwrap().clone();
                         if let Some((mods, vk)) = parse_shortcut_string(&sc) {
                             ACTIVE_SHORTCUT_MODS.store(mods, Ordering::Relaxed);
                             ACTIVE_SHORTCUT_VK.store(vk, Ordering::Relaxed);
-                            if (mods & MOD_WIN) == 0 {
-                                let ok = RegisterHotKey(hwnd, 1, mods, vk);
-                                println!("[GlobalReader] Re-registered activation shortcut '{}' (mods: 0x{:X}, vk: 0x{:X}, success: {})", sc, mods, vk, ok != 0);
-                            } else {
-                                println!("[GlobalReader] Configured Win shortcut '{}', active via WH_KEYBOARD_LL hook", sc);
-                            }
+                            let ok1 = RegisterHotKey(hwnd, 1, mods, vk);
+                            let ok2 = RegisterHotKey(hwnd, 2, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 0x53);
+                            println!("[GlobalReader] Re-registered activation shortcut '{}' (ok: {}) + fallback 'Ctrl+Alt+S' (ok: {})", sc, ok1 != 0, ok2 != 0);
                         }
                     } else {
                         println!("[GlobalReader] Master switch is OFF: activation shortcut unregistered");
@@ -799,7 +817,7 @@ pub fn start_global_reader_thread(app_handle: AppHandle) {
                             }
                         }
                     }
-                } else if msg.message == WM_USER_ACTIVATION_SHORTCUT || (msg.message == WM_HOTKEY && msg.w_param == 1) {
+                } else if msg.message == WM_USER_ACTIVATION_SHORTCUT || (msg.message == WM_HOTKEY && (msg.w_param == 1 || msg.w_param == 2)) {
                     if !MASTER_SERVICE_ENABLED.load(Ordering::Relaxed) {
                         continue;
                     }
@@ -1063,7 +1081,7 @@ pub fn trigger_read_selection() {
         let thread_id = WORKER_THREAD_ID.load(Ordering::Relaxed);
         if thread_id != 0 {
             unsafe {
-                win32::PostThreadMessageW(thread_id, win32::WM_USER_SELECTION_ACTION, 0, 0);
+                win32::PostThreadMessageW(thread_id, win32::WM_USER_ACTIVATION_SHORTCUT, 0, 0);
             }
         }
     }

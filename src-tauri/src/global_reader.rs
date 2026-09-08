@@ -566,7 +566,15 @@ pub fn play_current_selection_ext(app_handle: &AppHandle, is_api_call: bool) {
         let is_test_sample = clean.contains("Voxify Audio Pill is running")
             || clean.contains("Hi, I'm Sarah");
 
-        if !is_api_call && !is_test_sample && is_speech_blocked_by_quota() {
+        let is_cached = {
+            if let Ok(last) = LAST_READ_TEXT.lock() {
+                last.as_ref().map(|l| l.trim() == clean).unwrap_or(false)
+            } else {
+                false
+            }
+        };
+
+        if !is_api_call && !is_test_sample && !is_cached && is_speech_blocked_by_quota() {
             println!("[GlobalReader] Play blocked: Daily free reading quota reached. Displaying paywall pill.");
             let _ = crate::native_kokoro::stop();
             let _ = crate::native_tts::stop();
@@ -1358,7 +1366,6 @@ pub fn handle_direct_text(app_handle: &AppHandle, raw_markdown: &str) -> (usize,
         "speed": speed,
         "wordCount": word_count,
     }));
-    let _ = app_handle.emit("global-selection-text", clean_text.clone());
     crate::show_or_focus_hud(app_handle);
 
     // Pre-buffer first chunk immediately

@@ -399,7 +399,7 @@ function MiniPillStandalone() {
     if (hudStatus.status === 'speaking') {
       handlePause();
     } else {
-      // Check quota before starting playback (audition / test pill sample is always 100% free)
+      // Check quota before starting playback (audition / test pill sample & cached history are always 100% free)
       const usage = getInitialDailyUsage();
       let isActivated = false;
       try {
@@ -407,12 +407,21 @@ function MiniPillStandalone() {
         if (savedLic) isActivated = JSON.parse(savedLic).isActivated === true;
       } catch {}
 
+      let isCached = false;
+      try {
+        const saved = localStorage.getItem('voxify_history');
+        if (saved && hudStatus.text) {
+          const items: HistoryItem[] = JSON.parse(saved);
+          isCached = items.some(i => i.text.trim() === hudStatus.text.trim());
+        }
+      } catch {}
+
       const isTestSample = hudStatus.text && (
         hudStatus.text.includes("Voxify Audio Pill is running") ||
         hudStatus.text.includes("Hi, I'm Sarah")
       );
 
-      if (!isActivated && !isTestSample && usage.triggersUsed >= DAILY_TRIGGER_LIMIT) {
+      if (!isActivated && !isTestSample && !isCached && usage.triggersUsed >= DAILY_TRIGGER_LIMIT) {
         syncLicenseAndQuotaToRust(false, usage.triggersUsed);
         setHudStatus(prev => ({
           ...prev,
@@ -504,7 +513,7 @@ interface UpdateState {
   errorMessage?: string;
 }
 
-const CURRENT_APP_VERSION = '1.0.5';
+const CURRENT_APP_VERSION = '1.0.6';
 const REPO_OWNER = 'sayan2302';
 const DISTRIBUTION_REPO = 'voxify-app';
 const FALLBACK_REPO = 'voxify';
@@ -630,9 +639,12 @@ export function App() {
     return true;
   };
 
+  const lastCountedTextRef = useRef<string>('');
+
   const handleResetDailyQuota = () => {
     const fresh: DailyUsage = { date: getTodayDateString(), triggersUsed: 0 };
     setDailyUsage(fresh);
+    lastCountedTextRef.current = '';
     try {
       localStorage.setItem('voxify_daily_usage', JSON.stringify(fresh));
     } catch {}
@@ -657,6 +669,25 @@ export function App() {
   useEffect(() => {
     syncLicenseAndQuotaToRust(licenseInfo.isActivated, dailyUsage.triggersUsed);
   }, [licenseInfo.isActivated, dailyUsage.triggersUsed]);
+
+  // Automatic midnight date check to refresh daily quota seamlessly
+  useEffect(() => {
+    const checkMidnight = () => {
+      const today = getTodayDateString();
+      const current = getInitialDailyUsage();
+      if (current.date !== today) {
+        const fresh: DailyUsage = { date: today, triggersUsed: 0 };
+        try {
+          localStorage.setItem('voxify_daily_usage', JSON.stringify(fresh));
+        } catch {}
+        setDailyUsage(fresh);
+        lastCountedTextRef.current = '';
+        syncLicenseAndQuotaToRust(licenseInfo.isActivated, 0);
+      }
+    };
+    const timer = setInterval(checkMidnight, 30000);
+    return () => clearInterval(timer);
+  }, [licenseInfo.isActivated]);
 
   const [showLicenseModal, setShowLicenseModal] = useState<boolean>(false);
   const [licenseKeyInput, setLicenseKeyInput] = useState<string>('');
@@ -984,6 +1015,11 @@ export function App() {
             return;
           }
 
+          // Check if this exact text was already counted (prevent duplicate triggers on repeated events)
+          if (lastCountedTextRef.current === rawText) {
+            return;
+          }
+
           const newItem: HistoryItem = {
             id: Date.now().toString(),
             text: rawText,
@@ -1014,13 +1050,15 @@ export function App() {
             setShowPaywallModal(true);
             return;
           }
+
+          lastCountedTextRef.current = rawText;
           recordSpeechTriggerRef.current();
         }
       });
 
       const unlistenStatus = listen<HudStatusPayload>('global-hud-status', () => {});
 
-      // Listen for global shortcut (Win + Alt + H) to re-read the latest history item
+      // Listen for global shortcut (Win + Alt + H) to re-read the latest history item (ALWAYS completely free from cache)
       let unlistenReadHistory: (() => void) | null = null;
       listen('trigger-read-last-history', async () => {
         try {
@@ -1030,28 +1068,12 @@ export function App() {
             if (items.length > 0) {
               const item = items[0];
 
-              if (!recordSpeechTriggerRef.current()) {
-                await invoke('stop_kokoro_native').catch(() => {});
-                await invoke('show_quick_reader').catch(() => {});
-                syncLicenseAndQuotaToRust(false, DAILY_TRIGGER_LIMIT);
-                await emit('global-hud-status', {
-                  status: 'paywall',
-                  text: `Daily free limit reached (${DAILY_TRIGGER_LIMIT}/${DAILY_TRIGGER_LIMIT} reads used). Upgrade on Lemon Squeezy for unlimited access.`,
-                  voiceName: FIXED_VOICE,
-                  speed: FIXED_SPEED,
-                  wordCount: 15,
-                } as HudStatusPayload).catch(() => {});
-                setShowPaywallModal(true);
-                return;
-              }
-
               if (reReadTimerRef.current) {
                 clearTimeout(reReadTimerRef.current);
                 reReadTimerRef.current = null;
               }
               await invoke('stop_kokoro_native').catch(() => {});
               await invoke('show_quick_reader').catch(() => {});
-              await emit('global-selection-text', item.text).catch(() => {});
               await emit('global-hud-status', {
                 status: 'staging',
                 text: item.text,
@@ -1065,6 +1087,7 @@ export function App() {
                   text: item.text,
                   voice: FIXED_VOICE,
                   speed: FIXED_SPEED,
+                  isCached: true,
                 }).catch(() => {});
                 reReadTimerRef.current = null;
               }, 50);
@@ -1220,11 +1243,7 @@ export function App() {
   };
 
   const handleReReadHistoryItem = async (item: HistoryItem) => {
-    if (!recordSpeechTrigger()) {
-      setShowPaywallModal(true);
-      return;
-    }
-
+    // Re-reading from cache in UI is ALWAYS completely free: never blocks on quota and never increases reads used
     if (reReadTimerRef.current) {
       clearTimeout(reReadTimerRef.current);
       reReadTimerRef.current = null;
@@ -1234,7 +1253,6 @@ export function App() {
       // Immediately stop any prior audio playing in the player/pipeline (< 0.1ms)
       await invoke('stop_kokoro_native').catch(() => {});
       await invoke('show_quick_reader').catch(() => {});
-      await emit('global-selection-text', item.text).catch(() => {});
       await emit('global-hud-status', {
         status: 'staging',
         text: item.text,
@@ -1248,6 +1266,7 @@ export function App() {
           text: item.text,
           voice: FIXED_VOICE,
           speed: FIXED_SPEED,
+          isCached: true,
         }).catch(() => {});
         reReadTimerRef.current = null;
       }, 50);

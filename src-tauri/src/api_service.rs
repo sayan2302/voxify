@@ -124,7 +124,7 @@ Connection: close\r\n\r\n";
         let body = serde_json::json!({
             "status": "ok",
             "app": "Voxify",
-            "version": "1.0.5",
+            "version": "1.0.6",
             "api": "active"
         }).to_string();
         let response = format!(

@@ -46,8 +46,8 @@ if (-not $wv2Installed) {
 }
 
 # 3. Fetch Latest Release Information from GitHub
-$distRepo = "sayan2302/voxify-app"
-$fallbackRepo = "sayan2302/voxify"
+$distRepo = "sayan2302/voxify"
+$fallbackRepo = "sayan2302/voxify-app"
 
 Write-Host "[-] Connecting to GitHub Releases ($distRepo)..." -ForegroundColor Gray
 $release = $null

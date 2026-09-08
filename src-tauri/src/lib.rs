@@ -194,7 +194,10 @@ fn set_native_voice(name: String) -> Result<(), String> {
 
 #[tauri::command]
 fn speak_kokoro_native(app_handle: tauri::AppHandle, text: String, voice: Option<String>, speed: Option<f32>) -> Result<(), String> {
-    if global_reader::is_speech_blocked_by_quota() {
+    let is_test_sample = text.contains("Voxify Audio Pill is running")
+        || text.contains("Hi, I'm Sarah");
+
+    if !is_test_sample && global_reader::is_speech_blocked_by_quota() {
         let v = voice.unwrap_or_else(|| native_kokoro::get_current_voice_name());
         let s = speed.unwrap_or_else(|| native_kokoro::get_current_speed());
         let word_count = text.split_whitespace().count();

@@ -1,6 +1,6 @@
 [package]
 name = "voxify"
-version = "1.0.4"
+version = "1.0.5"
 description = "Voxify - Local Document-to-Audiobook & Global Tray Reader"
 authors = ["Voxify Team"]
 edition = "2021"

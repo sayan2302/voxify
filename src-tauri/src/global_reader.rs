@@ -514,7 +514,10 @@ pub fn handle_new_selection(app_handle: &AppHandle, text: String) {
     let word_count = text.split_whitespace().count();
 
     // Check if daily free reading quota has been exhausted
-    if is_speech_blocked_by_quota() {
+    let is_test_sample = text.contains("Voxify Audio Pill is running")
+        || text.contains("Hi, I'm Sarah");
+
+    if !is_test_sample && is_speech_blocked_by_quota() {
         println!("[GlobalReader] Speech blocked: Daily free reading quota reached. Displaying paywall pill.");
         let _ = app_handle.emit("global-hud-status", serde_json::json!({
             "status": "paywall",
@@ -560,7 +563,10 @@ pub fn play_current_selection_ext(app_handle: &AppHandle, is_api_call: bool) {
         }
 
         // Check if daily free reading quota has been exhausted
-        if !is_api_call && is_speech_blocked_by_quota() {
+        let is_test_sample = clean.contains("Voxify Audio Pill is running")
+            || clean.contains("Hi, I'm Sarah");
+
+        if !is_api_call && !is_test_sample && is_speech_blocked_by_quota() {
             println!("[GlobalReader] Play blocked: Daily free reading quota reached. Displaying paywall pill.");
             let _ = crate::native_kokoro::stop();
             let _ = crate::native_tts::stop();

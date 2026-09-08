@@ -399,7 +399,7 @@ function MiniPillStandalone() {
     if (hudStatus.status === 'speaking') {
       handlePause();
     } else {
-      // Check quota before starting playback
+      // Check quota before starting playback (audition / test pill sample is always 100% free)
       const usage = getInitialDailyUsage();
       let isActivated = false;
       try {
@@ -407,7 +407,12 @@ function MiniPillStandalone() {
         if (savedLic) isActivated = JSON.parse(savedLic).isActivated === true;
       } catch {}
 
-      if (!isActivated && usage.triggersUsed >= DAILY_TRIGGER_LIMIT) {
+      const isTestSample = hudStatus.text && (
+        hudStatus.text.includes("Voxify Audio Pill is running") ||
+        hudStatus.text.includes("Hi, I'm Sarah")
+      );
+
+      if (!isActivated && !isTestSample && usage.triggersUsed >= DAILY_TRIGGER_LIMIT) {
         syncLicenseAndQuotaToRust(false, usage.triggersUsed);
         setHudStatus(prev => ({
           ...prev,
@@ -499,7 +504,7 @@ interface UpdateState {
   errorMessage?: string;
 }
 
-const CURRENT_APP_VERSION = '1.0.4';
+const CURRENT_APP_VERSION = '1.0.5';
 const REPO_OWNER = 'sayan2302';
 const DISTRIBUTION_REPO = 'voxify-app';
 const FALLBACK_REPO = 'voxify';
@@ -972,12 +977,20 @@ export function App() {
       // Listen for new selections to record into history (strictly last 5 cached recordings)
       const unlisten = listen<string>('global-selection-text', async (event) => {
         if (event.payload && event.payload.trim()) {
+          const rawText = event.payload.trim();
+
+          // Audition & test pill samples are always free previews, never recorded to user history or counted against quota
+          const isTestSample = rawText.includes("Voxify Audio Pill is running") || rawText.includes("Hi, I'm Sarah");
+          if (isTestSample) {
+            return;
+          }
+
           const newItem: HistoryItem = {
             id: Date.now().toString(),
-            text: event.payload.trim(),
+            text: rawText,
             voiceName: FIXED_VOICE,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            wordCount: event.payload.trim().split(/\s+/).length,
+            wordCount: rawText.split(/\s+/).length,
           };
           setHistory(prev => {
             // Keep strictly last 5 recordings; older ones are automatically deleted

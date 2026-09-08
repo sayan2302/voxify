@@ -1338,7 +1338,7 @@ export function App() {
                   </div>
                   <div className="p-2.5 rounded-xl bg-[#151517] border border-white/5">
                     <span className="text-slate-500 block text-[10px] uppercase font-bold">Version</span>
-                    <span className="font-mono text-slate-200">v1.0.0 (Production)</span>
+                    <span className="font-mono text-slate-200">v1.0.1 (Production)</span>
                   </div>
                   <div className="p-2.5 rounded-xl bg-[#151517] border border-white/5">
                     <span className="text-slate-500 block text-[10px] uppercase font-bold">Privacy</span>
@@ -1372,7 +1372,7 @@ export function App() {
         <div className="flex items-center gap-3">
           <span>Check for updates</span>
           <span>•</span>
-          <span className="font-mono text-slate-400">v1.0.0</span>
+          <span className="font-mono text-slate-400">v1.0.1</span>
         </div>
       </footer>
     </div>

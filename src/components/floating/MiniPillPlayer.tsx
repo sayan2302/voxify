@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Pause, X, Check, FileText, Clock } from 'lucide-react';
+import { Play, Pause, X, Check, FileText, Clock, Lock, ExternalLink } from 'lucide-react';
 
 export interface MiniPillPlayerProps {
   currentText: string;
   isPlaying: boolean;
-  status?: 'ready' | 'staging' | 'speaking' | 'finished' | 'idle' | 'synthesizing' | 'buffering';
+  status?: 'ready' | 'staging' | 'speaking' | 'finished' | 'idle' | 'synthesizing' | 'buffering' | 'paywall';
   wordCount?: number;
   speed?: number;
   voiceName?: string;
@@ -17,6 +17,7 @@ export interface MiniPillPlayerProps {
   onTogglePlay: () => void;
   onStop?: () => void;
   onChangeSpeed?: (speed: number) => void;
+  onOpenMembership?: () => void;
   onClose: () => void;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
@@ -31,6 +32,7 @@ export interface MiniPillPlayerProps {
  * 4. Studio Calibration (Stage 2: 2.5s – safe runway): "Tuning {Voice} (N/M)" with live audio runway buffer counter.
  * 5. Synchronized Readiness Bloom (Stage 3): Smoothly blooms into [ ▶ Play ] once buffer runway is guaranteed safe!
  * 6. Active Runway Protection: If user triggers play early, displays non-blocking live buffering state until safe.
+ * 7. Paywall Polish: When daily quota is exhausted (5/5 used), smoothly presents an amber-gold pill capsule with direct Pro upgrade CTA.
  */
 export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
   currentText,
@@ -44,6 +46,7 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
   totalChunks,
   onPhaseChange,
   onTogglePlay,
+  onOpenMembership,
   onClose,
   onMouseEnter,
   onMouseLeave,
@@ -55,6 +58,7 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
   const estimatedSeconds = Math.max(1, Math.round(computedWordCount / 2.6));
   const isSpeaking = isPlaying || status === 'speaking';
   const isFinished = status === 'finished';
+  const isPaywall = status === 'paywall';
 
   // Calculate if safe audio runway has been established in RAM
   const isSafe = Boolean(
@@ -73,12 +77,12 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
     onPhaseChange?.(phase);
   }, [phase, onPhaseChange]);
 
-  // If audio is actively speaking, ensure pill is always in 'controls'
+  // If audio is actively speaking or in paywall state, ensure pill is always in 'controls'
   useEffect(() => {
-    if (isSpeaking) {
+    if (isSpeaking || isPaywall) {
       setPhase('controls');
     }
-  }, [isSpeaking]);
+  }, [isSpeaking, isPaywall]);
 
   // Reset to compact when status becomes idle or text is cleared
   useEffect(() => {
@@ -94,7 +98,7 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
       return;
     }
 
-    if (isSpeaking) {
+    if (isSpeaking || isPaywall) {
       setPhase('controls');
       return;
     }
@@ -111,7 +115,7 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
     return () => {
       clearTimeout(stage1Timer);
     };
-  }, [currentText]);
+  }, [currentText, isPaywall]);
 
   // Hover: never skip or force controls prematurely during Stage 1 or Stage 2
   const handleMouseEnter = () => {
@@ -127,30 +131,71 @@ export const MiniPillPlayer: React.FC<MiniPillPlayerProps> = ({
       {/* Outer Container: Gravity Descent from outside screen bezel */}
       <div className="animate-water-fall relative z-10 flex items-center justify-center">
         {/* Water Impact Circular Ripple Wave (radiates when droplet impacts) */}
-        {!isSpeaking && phase === 'compact' && (
+        {!isSpeaking && !isPaywall && phase === 'compact' && (
           <div className="animate-water-ripple pointer-events-none" />
         )}
 
         {/* Inner Capsule: Organic Water Droplet Shape -> Impact Squish -> Slow Expansion */}
         <div
-          className={`relative overflow-hidden rounded-full bg-[#080d1a] flex items-center justify-between select-none text-white cursor-default ${
-            phase === 'compact' && !isSpeaking
-              ? 'animate-water-morph w-[152px] h-[38px] px-3 border border-white/20 shadow-[0_8px_24px_rgba(0,0,0,0.75),0_0_14px_rgba(37,99,235,0.35),inset_0_1px_2px_rgba(255,255,255,0.25)]'
+          className={`relative overflow-hidden rounded-full flex items-center justify-between select-none text-white cursor-default transition-all duration-300 ${
+            isPaywall
+              ? 'w-[238px] h-[38px] px-2.5 bg-gradient-to-r from-[#170e03] via-[#090b14] to-[#170e03] border border-amber-500/60 shadow-[0_8px_30px_rgba(0,0,0,0.85),0_0_20px_rgba(245,158,11,0.3),inset_0_1px_2px_rgba(251,191,36,0.25)] hover:border-amber-400 hover:shadow-[0_8px_32px_rgba(245,158,11,0.45)]'
+              : phase === 'compact' && !isSpeaking
+              ? 'animate-water-morph w-[152px] h-[38px] px-3 bg-[#080d1a] border border-white/20 shadow-[0_8px_24px_rgba(0,0,0,0.75),0_0_14px_rgba(37,99,235,0.35),inset_0_1px_2px_rgba(255,255,255,0.25)]'
               : phase === 'expanding' && !isSpeaking
-              ? 'transition-[border-color,box-shadow] duration-300 w-[152px] h-[38px] px-3 border border-[#2563eb]/60 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_18px_rgba(59,130,246,0.35)]'
+              ? 'w-[152px] h-[38px] px-3 bg-[#080d1a] border border-[#2563eb]/60 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_18px_rgba(59,130,246,0.35)]'
               : isSpeaking
-              ? 'transition-[border-color,box-shadow] duration-300 w-[152px] h-[38px] pl-[5px] pr-[7px] border border-[#3b82f6]/60 shadow-[0_8px_30px_rgba(29,78,216,0.5),0_0_18px_rgba(59,130,246,0.35)]'
-              : 'transition-[border-color,box-shadow] duration-300 w-[152px] h-[38px] pl-[5px] pr-[7px] border border-white/25 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_14px_rgba(37,99,235,0.25)]'
+              ? 'w-[152px] h-[38px] pl-[5px] pr-[7px] bg-[#080d1a] border border-[#3b82f6]/60 shadow-[0_8px_30px_rgba(29,78,216,0.5),0_0_18px_rgba(59,130,246,0.35)]'
+              : 'w-[152px] h-[38px] pl-[5px] pr-[7px] bg-[#080d1a] border border-white/25 shadow-[0_8px_28px_rgba(0,0,0,0.8),0_0_14px_rgba(37,99,235,0.25)]'
           }`}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={onMouseLeave}
           data-tauri-drag-region
         >
-          {/* Top Specular Water Highlight Crescent (light reflecting on curved water surface) */}
-          <div className="absolute top-0 inset-x-0 h-[40%] pointer-events-none rounded-t-full bg-gradient-to-b from-white/30 via-white/5 to-transparent z-0" />
+          {/* Top Specular Water Highlight Crescent */}
+          <div
+            className={`absolute top-0 inset-x-0 h-[40%] pointer-events-none rounded-t-full bg-gradient-to-b ${
+              isPaywall
+                ? 'from-amber-300/25 via-amber-300/5 to-transparent'
+                : 'from-white/30 via-white/5 to-transparent'
+            } z-0`}
+          />
 
+          {isPaywall ? (
+            /* Paywall Capsule: [ 🔒 5/5 Free Reads Used · Upgrade Pro ↗ ]   [ ✕ ] */
+            <div
+              onClick={onOpenMembership}
+              className="w-full flex items-center justify-between animate-pill-content relative z-10 cursor-pointer group"
+              title="Daily free limit reached (5/5 reads used). Click to upgrade to Lifetime Pro on Lemon Squeezy!"
+            >
+              {/* Left: Lock Badge */}
+              <div className="w-6 h-6 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(245,158,11,0.35)]">
+                <Lock className="w-3 h-3 text-amber-300 animate-pulse" />
+              </div>
 
-          {phase === 'compact' && !isSpeaking ? (
+              {/* Center: Upgrade CTA */}
+              <div className="flex flex-col leading-tight items-start px-2 flex-1 min-w-0">
+                <span className="text-[10px] font-bold text-amber-400 tracking-tight truncate">
+                  5/5 Free Reads Used
+                </span>
+                <span className="text-[9px] font-semibold text-slate-300 group-hover:text-amber-200 transition-colors flex items-center gap-0.5">
+                  Upgrade Pro <ExternalLink className="w-2.5 h-2.5 text-amber-400/90 ml-0.5" />
+                </span>
+              </div>
+
+              {/* Right: Close Button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose();
+                }}
+                className="w-5 h-5 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-colors active:scale-95 shrink-0"
+                title="Dismiss Paywall"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : phase === 'compact' && !isSpeaking ? (
             /* Stage 1: Word Count & Expected Time with Small Icons */
             <div className="w-full flex items-center justify-center gap-3 animate-water-content relative z-10 px-2">
               {/* Word Count with Document Icon */}

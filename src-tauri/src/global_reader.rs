@@ -11,6 +11,13 @@ pub static SETTLE_DELAY_MS: AtomicU32 = AtomicU32::new(10);
 pub static EARCON_ENABLED: AtomicBool = AtomicBool::new(true);
 pub static API_SERVICE_ENABLED: AtomicBool = AtomicBool::new(true);
 pub static READ_HISTORY_SHORTCUT_ENABLED: AtomicBool = AtomicBool::new(true);
+pub static IS_PRO_LICENSE_ACTIVE: AtomicBool = AtomicBool::new(false);
+pub static DAILY_QUOTA_REACHED: AtomicBool = AtomicBool::new(false);
+
+pub fn is_speech_blocked_by_quota() -> bool {
+    !IS_PRO_LICENSE_ACTIVE.load(Ordering::Relaxed) && DAILY_QUOTA_REACHED.load(Ordering::Relaxed)
+}
+
 static IS_SIMULATING_COPY: AtomicBool = AtomicBool::new(false);
 static WORKER_THREAD_ID: AtomicU32 = AtomicU32::new(0);
 static CURRENT_SHORTCUT: Mutex<String> = Mutex::new(String::new());
@@ -495,6 +502,21 @@ pub fn handle_new_selection(app_handle: &AppHandle, text: String) {
     let speed = crate::native_kokoro::get_current_speed();
     let word_count = text.split_whitespace().count();
 
+    // Check if daily free reading quota has been exhausted
+    if is_speech_blocked_by_quota() {
+        println!("[GlobalReader] Speech blocked: Daily free reading quota reached. Displaying paywall pill.");
+        let _ = app_handle.emit("global-hud-status", serde_json::json!({
+            "status": "paywall",
+            "text": text,
+            "voiceName": voice_name,
+            "speed": speed,
+            "wordCount": word_count,
+        }));
+        let _ = app_handle.emit("global-selection-text", text);
+        crate::show_or_focus_hud(app_handle);
+        return;
+    }
+
     // 2. Dynamic Island summon: Emit event first so WebView renders fresh staging state
     let _ = app_handle.emit("global-hud-status", serde_json::json!({
         "status": "staging",
@@ -511,6 +533,10 @@ pub fn handle_new_selection(app_handle: &AppHandle, text: String) {
 }
 
 pub fn play_current_selection(app_handle: &AppHandle) {
+    play_current_selection_ext(app_handle, false);
+}
+
+pub fn play_current_selection_ext(app_handle: &AppHandle, is_api_call: bool) {
     let text_opt = {
         let guard = CURRENT_SELECTION_TEXT.lock().unwrap();
         guard.clone()
@@ -519,6 +545,26 @@ pub fn play_current_selection(app_handle: &AppHandle) {
     if let Some(text) = text_opt {
         let clean = text.trim().to_string();
         if clean.is_empty() {
+            return;
+        }
+
+        // Check if daily free reading quota has been exhausted
+        if !is_api_call && is_speech_blocked_by_quota() {
+            println!("[GlobalReader] Play blocked: Daily free reading quota reached. Displaying paywall pill.");
+            let _ = crate::native_kokoro::stop();
+            let _ = crate::native_tts::stop();
+            let voice_name = crate::native_kokoro::get_current_voice_name();
+            let speed = crate::native_kokoro::get_current_speed();
+            let word_count = clean.split_whitespace().count();
+
+            let _ = app_handle.emit("global-hud-status", serde_json::json!({
+                "status": "paywall",
+                "text": clean,
+                "voiceName": voice_name,
+                "speed": speed,
+                "wordCount": word_count,
+            }));
+            crate::show_or_focus_hud(app_handle);
             return;
         }
 
@@ -1050,6 +1096,33 @@ pub fn get_read_history_shortcut_enabled() -> bool {
     READ_HISTORY_SHORTCUT_ENABLED.load(Ordering::Relaxed)
 }
 
+#[tauri::command]
+pub fn set_license_status(is_active: bool) {
+    IS_PRO_LICENSE_ACTIVE.store(is_active, Ordering::SeqCst);
+    println!("[GlobalReader] Pro license status updated: {}", is_active);
+}
+
+#[tauri::command]
+pub fn set_daily_quota_status(is_reached: bool) {
+    DAILY_QUOTA_REACHED.store(is_reached, Ordering::SeqCst);
+    println!("[GlobalReader] Daily quota reached updated: {}", is_reached);
+}
+
+#[tauri::command]
+pub fn get_speech_blocked() -> bool {
+    is_speech_blocked_by_quota()
+}
+
+#[tauri::command]
+pub fn open_membership_window(app_handle: AppHandle) {
+    if let Some(main_win) = app_handle.get_webview_window("main") {
+        let _ = main_win.show();
+        let _ = main_win.unminimize();
+        let _ = main_win.set_focus();
+        let _ = app_handle.emit("navigate-tab", "membership");
+    }
+}
+
 pub fn set_current_selection_text(text: String) {
     if let Ok(mut current) = CURRENT_SELECTION_TEXT.lock() {
         *current = Some(text);
@@ -1272,7 +1345,7 @@ pub fn handle_direct_text(app_handle: &AppHandle, raw_markdown: &str) -> (usize,
     std::thread::spawn(move || {
         // Small delay to allow frontend staging animation to mount cleanly
         std::thread::sleep(std::time::Duration::from_millis(150));
-        play_current_selection(&app_h);
+        play_current_selection_ext(&app_h, true);
     });
 
     (word_count, estimated_seconds)

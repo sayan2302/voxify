@@ -193,7 +193,21 @@ fn set_native_voice(name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn speak_kokoro_native(text: String, voice: Option<String>, speed: Option<f32>) -> Result<(), String> {
+fn speak_kokoro_native(app_handle: tauri::AppHandle, text: String, voice: Option<String>, speed: Option<f32>) -> Result<(), String> {
+    if global_reader::is_speech_blocked_by_quota() {
+        let v = voice.unwrap_or_else(|| native_kokoro::get_current_voice_name());
+        let s = speed.unwrap_or_else(|| native_kokoro::get_current_speed());
+        let word_count = text.split_whitespace().count();
+        let _ = app_handle.emit("global-hud-status", serde_json::json!({
+            "status": "paywall",
+            "text": text,
+            "voiceName": v,
+            "speed": s,
+            "wordCount": word_count,
+        }));
+        show_or_focus_hud(&app_handle);
+        return Err("Daily free limit reached. Please upgrade to Pro.".to_string());
+    }
     global_reader::set_current_selection_text(text.clone());
     let v = voice.unwrap_or_else(|| native_kokoro::get_current_voice_name());
     let s = speed.unwrap_or_else(|| native_kokoro::get_current_speed());
@@ -325,6 +339,10 @@ pub fn run() {
             global_reader::get_api_service_enabled,
             global_reader::set_read_history_shortcut_enabled,
             global_reader::get_read_history_shortcut_enabled,
+            global_reader::set_license_status,
+            global_reader::set_daily_quota_status,
+            global_reader::get_speech_blocked,
+            global_reader::open_membership_window,
             autostart::get_autostart_enabled,
             autostart::set_autostart_enabled,
             install_latest_update

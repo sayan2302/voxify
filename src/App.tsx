@@ -21,7 +21,6 @@ import {
   AlertCircle,
   X,
   Laptop,
-  Infinity,
   Feather,
   Command,
   Volume2,
@@ -36,7 +35,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
 
 export interface HudStatusPayload {
-  status: 'ready' | 'staging' | 'synthesizing' | 'speaking' | 'finished' | 'idle' | 'buffering';
+  status: 'ready' | 'staging' | 'synthesizing' | 'speaking' | 'finished' | 'idle' | 'buffering' | 'paywall';
   text: string;
   voiceName: string;
   speed: number;
@@ -95,6 +94,13 @@ const getInitialDailyUsage = (): DailyUsage => {
   } catch {
     return { date: getTodayDateString(), triggersUsed: 0 };
   }
+};
+
+export const syncLicenseAndQuotaToRust = (isActivated: boolean, triggersUsed: number) => {
+  const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+  if (!isTauri) return;
+  invoke('set_license_status', { isActive: isActivated }).catch(() => {});
+  invoke('set_daily_quota_status', { isReached: !isActivated && triggersUsed >= DAILY_TRIGGER_LIMIT }).catch(() => {});
 };
 
 /**
@@ -156,9 +162,13 @@ const HandySwitch: React.FC<{
  * Runs when ?mode=mini-pill is loaded - consumes ~0MB RAM, displays the floating audio pill.
  */
 function MiniPillStandalone() {
+  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const paramStatus = (urlParams?.get('status') as HudStatusPayload['status']) || 'idle';
+  const paramText = urlParams?.get('text') || (paramStatus === 'paywall' ? 'Daily Free Limit Reached' : (paramStatus !== 'idle' ? 'Sample preview text' : ''));
+
   const [hudStatus, setHudStatus] = useState<HudStatusPayload>({
-    status: 'idle',
-    text: '',
+    status: paramStatus,
+    text: paramText,
     voiceName: FIXED_VOICE,
     speed: FIXED_SPEED,
   });
@@ -166,10 +176,21 @@ function MiniPillStandalone() {
   const [isRunwaySafe, setIsRunwaySafe] = useState<boolean>(false);
   const [bufferedChunks, setBufferedChunks] = useState<number>(0);
   const [totalChunks, setTotalChunks] = useState<number>(0);
-  const [pillPhase, setPillPhase] = useState<'compact' | 'expanding' | 'controls'>('compact');
+  const [pillPhase, setPillPhase] = useState<'compact' | 'expanding' | 'controls'>(paramStatus === 'paywall' ? 'controls' : 'compact');
   const [isHovered, setIsHovered] = useState<boolean>(false);
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const finishTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Sync license and daily usage with Rust on HUD window mount
+  useEffect(() => {
+    const usage = getInitialDailyUsage();
+    let isActivated = false;
+    try {
+      const savedLic = localStorage.getItem('voxify_license_info');
+      if (savedLic) isActivated = JSON.parse(savedLic).isActivated === true;
+    } catch {}
+    syncLicenseAndQuotaToRust(isActivated, usage.triggersUsed);
+  }, []);
 
   useEffect(() => {
     document.documentElement.classList.add('mini-pill-mode');
@@ -192,6 +213,20 @@ function MiniPillStandalone() {
             setBufferedChunks(0);
             setTotalChunks(0);
             setPillPhase('compact');
+            if (idleTimerRef.current) {
+              clearTimeout(idleTimerRef.current);
+              idleTimerRef.current = null;
+            }
+            if (finishTimerRef.current) {
+              clearTimeout(finishTimerRef.current);
+              finishTimerRef.current = null;
+            }
+          } else if (event.payload.status === 'paywall') {
+            setIsPrebufferReady(false);
+            setIsRunwaySafe(false);
+            setBufferedChunks(0);
+            setTotalChunks(0);
+            setPillPhase('controls');
             if (idleTimerRef.current) {
               clearTimeout(idleTimerRef.current);
               idleTimerRef.current = null;
@@ -260,7 +295,7 @@ function MiniPillStandalone() {
           }
           setHudStatus(prev => ({
             ...prev,
-            status: 'staging',
+            status: prev.status === 'paywall' ? 'paywall' : 'staging',
             text: event.payload,
             voiceName: FIXED_VOICE,
             speed: FIXED_SPEED,
@@ -298,7 +333,21 @@ function MiniPillStandalone() {
 
     const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
 
-    if (hudStatus.status !== 'speaking' && pillPhase === 'controls') {
+    if (hudStatus.status === 'paywall') {
+      if (!isHovered) {
+        idleTimerRef.current = setTimeout(() => {
+          if (isTauri) {
+            invoke('hide_quick_reader').catch(() => {});
+          }
+          setHudStatus({ status: 'idle', text: '', voiceName: FIXED_VOICE, speed: FIXED_SPEED });
+          setPillPhase('compact');
+          setIsPrebufferReady(false);
+          setIsRunwaySafe(false);
+          setBufferedChunks(0);
+          setTotalChunks(0);
+        }, 12000);
+      }
+    } else if (hudStatus.status !== 'speaking' && pillPhase === 'controls') {
       if (!isHovered) {
         idleTimerRef.current = setTimeout(() => {
           if (isTauri) {
@@ -350,6 +399,24 @@ function MiniPillStandalone() {
     if (hudStatus.status === 'speaking') {
       handlePause();
     } else {
+      // Check quota before starting playback
+      const usage = getInitialDailyUsage();
+      let isActivated = false;
+      try {
+        const savedLic = localStorage.getItem('voxify_license_info');
+        if (savedLic) isActivated = JSON.parse(savedLic).isActivated === true;
+      } catch {}
+
+      if (!isActivated && usage.triggersUsed >= DAILY_TRIGGER_LIMIT) {
+        syncLicenseAndQuotaToRust(false, usage.triggersUsed);
+        setHudStatus(prev => ({
+          ...prev,
+          status: 'paywall',
+        }));
+        setPillPhase('controls');
+        return;
+      }
+
       if (isTauri) {
         invoke('play_selection').catch(() => {});
       }
@@ -357,6 +424,14 @@ function MiniPillStandalone() {
         ...prev,
         status: 'speaking',
       }));
+    }
+  };
+
+  const handleOpenMembership = () => {
+    const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+    if (isTauri) {
+      invoke('open_membership_window').catch(() => {});
+      invoke('hide_quick_reader').catch(() => {});
     }
   };
 
@@ -395,6 +470,7 @@ function MiniPillStandalone() {
         totalChunks={totalChunks}
         onPhaseChange={setPillPhase}
         onTogglePlay={handleTogglePlay}
+        onOpenMembership={handleOpenMembership}
         onClose={handleClose}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -423,7 +499,7 @@ interface UpdateState {
   errorMessage?: string;
 }
 
-const CURRENT_APP_VERSION = '1.0.2';
+const CURRENT_APP_VERSION = '1.0.3';
 const REPO_OWNER = 'sayan2302';
 const DISTRIBUTION_REPO = 'voxify-app';
 const FALLBACK_REPO = 'voxify';
@@ -528,9 +604,13 @@ export function App() {
   };
 
   const recordSpeechTrigger = (): boolean => {
-    if (licenseInfo.isActivated) return true;
+    if (licenseInfo.isActivated) {
+      syncLicenseAndQuotaToRust(true, 0);
+      return true;
+    }
     const current = getInitialDailyUsage();
     if (current.triggersUsed >= DAILY_TRIGGER_LIMIT) {
+      syncLicenseAndQuotaToRust(false, current.triggersUsed);
       setShowPaywallModal(true);
       return false;
     }
@@ -542,6 +622,7 @@ export function App() {
     try {
       localStorage.setItem('voxify_daily_usage', JSON.stringify(updated));
     } catch {}
+    syncLicenseAndQuotaToRust(false, updated.triggersUsed);
     return true;
   };
 
@@ -551,6 +632,7 @@ export function App() {
     try {
       localStorage.setItem('voxify_daily_usage', JSON.stringify(fresh));
     } catch {}
+    syncLicenseAndQuotaToRust(licenseInfo.isActivated, 0);
   };
 
   const handleOpenLemonSqueezy = async () => {
@@ -567,6 +649,11 @@ export function App() {
     canTriggerSpeechRef.current = canTriggerSpeech;
     recordSpeechTriggerRef.current = recordSpeechTrigger;
   });
+
+  useEffect(() => {
+    syncLicenseAndQuotaToRust(licenseInfo.isActivated, dailyUsage.triggersUsed);
+  }, [licenseInfo.isActivated, dailyUsage.triggersUsed]);
+
   const [showLicenseModal, setShowLicenseModal] = useState<boolean>(false);
   const [licenseKeyInput, setLicenseKeyInput] = useState<string>('');
   const [licenseLoading, setLicenseLoading] = useState<boolean>(false);
@@ -603,6 +690,7 @@ export function App() {
       try {
         localStorage.setItem('voxify_license_info', JSON.stringify(mockInfo));
       } catch {}
+      syncLicenseAndQuotaToRust(true, dailyUsage.triggersUsed);
       setLicenseLoading(false);
       setLicenseSuccess('License activated successfully! Full access unlocked.');
       setTimeout(() => {
@@ -684,6 +772,7 @@ export function App() {
     try {
       localStorage.removeItem('voxify_license_info');
     } catch {}
+    syncLicenseAndQuotaToRust(false, dailyUsage.triggersUsed);
     setLicenseKeyInput('');
     setLicenseError('');
   };
@@ -873,6 +962,13 @@ export function App() {
           .catch(() => {});
       });
 
+      // Listen for tab navigation requests (e.g. clicking upgrade on Floating Audio Pill)
+      listen<string>('navigate-tab', (event) => {
+        if (event.payload && ['general', 'history', 'about', 'membership'].includes(event.payload)) {
+          setActiveTab(event.payload as TabKey);
+        }
+      });
+
       // Listen for new selections to record into history (strictly last 5 cached recordings)
       const unlisten = listen<string>('global-selection-text', async (event) => {
         if (event.payload && event.payload.trim()) {
@@ -895,8 +991,9 @@ export function App() {
           // Check daily free trigger quota
           if (!canTriggerSpeechRef.current()) {
             await invoke('stop_kokoro_native').catch(() => {});
+            syncLicenseAndQuotaToRust(false, DAILY_TRIGGER_LIMIT);
             await emit('global-hud-status', {
-              status: 'staging',
+              status: 'paywall',
               text: `Daily free limit reached (${DAILY_TRIGGER_LIMIT}/${DAILY_TRIGGER_LIMIT} reads used). Upgrade on Lemon Squeezy for unlimited access.`,
               voiceName: FIXED_VOICE,
               speed: FIXED_SPEED,
@@ -924,8 +1021,9 @@ export function App() {
               if (!recordSpeechTriggerRef.current()) {
                 await invoke('stop_kokoro_native').catch(() => {});
                 await invoke('show_quick_reader').catch(() => {});
+                syncLicenseAndQuotaToRust(false, DAILY_TRIGGER_LIMIT);
                 await emit('global-hud-status', {
-                  status: 'staging',
+                  status: 'paywall',
                   text: `Daily free limit reached (${DAILY_TRIGGER_LIMIT}/${DAILY_TRIGGER_LIMIT} reads used). Upgrade on Lemon Squeezy for unlimited access.`,
                   voiceName: FIXED_VOICE,
                   speed: FIXED_SPEED,
@@ -1579,22 +1677,6 @@ export function App() {
                 <div className="absolute -top-24 -right-24 w-72 h-72 bg-[#2563eb]/20 rounded-full blur-3xl pointer-events-none" />
                 <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
-                {/* Top Badges */}
-                <div className="relative flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-semibold text-emerald-400 tracking-wider uppercase">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Untamed Silicon Privacy
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-[10px] font-semibold text-purple-300 tracking-wider uppercase">
-                    <Infinity className="w-3 h-3 text-purple-400" />
-                    Perpetual Ownership
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-500/15 border border-blue-500/30 text-[10px] font-semibold text-blue-300 tracking-wider uppercase">
-                    <Terminal className="w-3 h-3 text-blue-400" />
-                    Agentic Ingress (:18200)
-                  </span>
-                </div>
-
                 {/* Brand Header */}
                 <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3.5">
@@ -1614,24 +1696,13 @@ export function App() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleTestAudioPill}
-                      className="px-3 py-1.5 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold shadow-md shadow-[#2563eb]/30 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-                      title="Experience the neural voice"
-                    >
-                      <Volume2 className="w-3.5 h-3.5" />
-                      <span>Hear It Live</span>
-                    </button>
-                    <button
-                      onClick={handleCheckForUpdates}
-                      disabled={updateState.status === 'checking' || updateState.status === 'installing'}
-                      className="px-3 py-1.5 rounded-xl bg-[#151518] hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${updateState.status === 'checking' || updateState.status === 'installing' ? 'animate-spin text-[#3b82f6]' : ''}`} />
-                      <span>{updateState.status === 'checking' ? 'Checking...' : 'Updates'}</span>
-                    </button>
-                  </div>
+                  <button
+                    onClick={handleTestAudioPill}
+                    className="w-8 h-8 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white flex items-center justify-center shadow-md shadow-[#2563eb]/30 transition-all active:scale-95 cursor-pointer"
+                    title="Experience the neural voice"
+                  >
+                    <Volume2 className="w-4 h-4" />
+                  </button>
                 </div>
 
                 {/* Seductive 1-Liner */}
@@ -1770,26 +1841,6 @@ export function App() {
                   <p className="text-[11px] text-slate-400 leading-relaxed">
                     Highlight text anywhere and press your shortcut. A floating glass pill materializes instantly at your cursor.
                   </p>
-                </div>
-              </div>
-
-              {/* ENGINE METRICS STRIP */}
-              <div className="p-3 rounded-2xl bg-[#141417] border border-white/5 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                <div className="p-2 rounded-xl bg-[#1a1a1e] border border-white/5">
-                  <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">Acoustic Engine</span>
-                  <span className="font-mono text-slate-200 text-[11px]">Sarah Neural</span>
-                </div>
-                <div className="p-2 rounded-xl bg-[#1a1a1e] border border-white/5">
-                  <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">Latency</span>
-                  <span className="text-[#93c5fd] font-medium font-mono text-[11px]">Real-Time Flow</span>
-                </div>
-                <div className="p-2 rounded-xl bg-[#1a1a1e] border border-white/5">
-                  <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">REST Ingress</span>
-                  <span className="font-mono text-emerald-400 text-[11px]">127.0.0.1:18200</span>
-                </div>
-                <div className="p-2 rounded-xl bg-[#1a1a1e] border border-white/5">
-                  <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">Data Sanctuary</span>
-                  <span className="text-emerald-400 font-medium text-[11px]">100% Offline</span>
                 </div>
               </div>
             </div>

@@ -2044,9 +2044,6 @@ export function App() {
                       </button>
                     </div>
 
-                    <p className="text-[10px] text-slate-500">
-                      Tip: For instant local testing, enter <code className="text-slate-300 font-mono px-1 rounded bg-white/5">VOX-DEV</code> or <code className="text-slate-300 font-mono px-1 rounded bg-white/5">TEST</code>.
-                    </p>
 
                     {licenseError && (
                       <div className="flex items-center gap-1.5 text-rose-400 text-xs">

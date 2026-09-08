@@ -104,7 +104,10 @@ Start-Sleep -Seconds 2
 Remove-Item -Path $tempInstaller -Force -ErrorAction SilentlyContinue
 
 # 5. Verify & Auto-Launch
-$installedExe = "$env:LOCALAPPDATA\Programs\Voxify\Voxify.exe"
+$installedExe = "$env:LOCALAPPDATA\voxify\voxify.exe"
+if (-not (Test-Path $installedExe)) {
+    $installedExe = "$env:LOCALAPPDATA\Programs\Voxify\Voxify.exe"
+}
 if (-not (Test-Path $installedExe)) {
     $installedExe = "$env:ProgramFiles\Voxify\Voxify.exe"
 }

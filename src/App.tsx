@@ -29,7 +29,12 @@ import {
   ShoppingBag,
   ExternalLink,
   Clock,
+  Rocket,
+  PartyPopper,
+  BookOpen,
+  HelpCircle,
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { listen, emit } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
@@ -493,7 +498,7 @@ function MiniPillStandalone() {
   );
 }
 
-type TabKey = 'general' | 'history' | 'about' | 'membership';
+type TabKey = 'general' | 'history' | 'docs' | 'about' | 'membership';
 
 export interface LicenseInfo {
   isActivated: boolean;
@@ -513,7 +518,7 @@ interface UpdateState {
   errorMessage?: string;
 }
 
-const CURRENT_APP_VERSION = '1.0.7';
+const CURRENT_APP_VERSION = '1.0.8';
 const REPO_OWNER = 'sayan2302';
 const DISTRIBUTION_REPO = 'voxify-app';
 const FALLBACK_REPO = 'voxify';
@@ -690,10 +695,51 @@ export function App() {
   }, [licenseInfo.isActivated]);
 
   const [showLicenseModal, setShowLicenseModal] = useState<boolean>(false);
+  const [showCongratsModal, setShowCongratsModal] = useState<boolean>(false);
+  const [congratsDetails, setCongratsDetails] = useState<{ email: string; key: string } | null>(null);
   const [licenseKeyInput, setLicenseKeyInput] = useState<string>('');
   const [licenseLoading, setLicenseLoading] = useState<boolean>(false);
   const [licenseError, setLicenseError] = useState<string>('');
   const [licenseSuccess, setLicenseSuccess] = useState<string>('');
+
+  const triggerConfettiCelebration = () => {
+    try {
+      // First burst - vibrant mixed stars and dots
+      confetti({
+        particleCount: 90,
+        spread: 80,
+        origin: { y: 0.55 },
+        colors: ['#3b82f6', '#60a5fa', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'],
+        zIndex: 99999,
+      });
+
+      // Second burst from the left
+      setTimeout(() => {
+        confetti({
+          particleCount: 50,
+          angle: 60,
+          spread: 65,
+          origin: { x: 0.1, y: 0.65 },
+          colors: ['#38bdf8', '#818cf8', '#34d399', '#fbbf24'],
+          zIndex: 99999,
+        });
+      }, 180);
+
+      // Third burst from the right
+      setTimeout(() => {
+        confetti({
+          particleCount: 50,
+          angle: 120,
+          spread: 65,
+          origin: { x: 0.9, y: 0.65 },
+          colors: ['#38bdf8', '#818cf8', '#34d399', '#fbbf24'],
+          zIndex: 99999,
+        });
+      }, 350);
+    } catch (e) {
+      console.warn('Confetti trigger skipped:', e);
+    }
+  };
 
   const handleActivateLicense = async (keyToActivate?: string) => {
     const rawKey = (keyToActivate || licenseKeyInput).trim();
@@ -728,10 +774,10 @@ export function App() {
       syncLicenseAndQuotaToRust(true, dailyUsage.triggersUsed);
       setLicenseLoading(false);
       setLicenseSuccess('License activated successfully! Full access unlocked.');
-      setTimeout(() => {
-        setShowLicenseModal(false);
-        setLicenseSuccess('');
-      }, 1000);
+      setShowLicenseModal(false);
+      setCongratsDetails({ email: mockInfo.customerEmail || 'Verified Owner', key: mockInfo.key });
+      setShowCongratsModal(true);
+      triggerConfettiCelebration();
       return;
     }
 
@@ -767,10 +813,10 @@ export function App() {
           localStorage.setItem('voxify_license_info', JSON.stringify(info));
         } catch {}
         setLicenseSuccess('License successfully verified & activated!');
-        setTimeout(() => {
-          setShowLicenseModal(false);
-          setLicenseSuccess('');
-        }, 1000);
+        setShowLicenseModal(false);
+        setCongratsDetails({ email: info.customerEmail || 'Paying Customer', key: info.key });
+        setShowCongratsModal(true);
+        triggerConfettiCelebration();
       } else {
         const msg = data.error || 'Invalid or expired license key. Please check your purchase receipt.';
         setLicenseError(msg);
@@ -1297,40 +1343,30 @@ export function App() {
         {/* Left Sidebar (~200px) */}
         <aside className="w-52 bg-[#121214] border-r border-white/5 flex flex-col justify-between shrink-0 p-4">
           <div className="space-y-6">
-            {/* App Logo: Brand Icon & Title */}
+            {/* App Brand Header */}
             <div className="pt-2 px-2 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <img
-                  src="/icon.png"
-                  alt="Voxify Logo"
-                  className="w-7 h-7 rounded-lg shadow-md shadow-black/40 ring-1 ring-white/10 object-cover"
-                />
-                <div className="relative">
-                  <span className="text-2xl font-black tracking-tight text-[#3b82f6] font-sans drop-shadow-[0_2px_10px_rgba(37,99,235,0.55)]">
-                    voxify
-                  </span>
-                  <span className="absolute -bottom-1 right-0 w-1.5 h-1.5 rounded-full bg-[#2563eb] ring-2 ring-[#121214]" />
-                </div>
-              </div>
+              <img
+                src="/brand.png"
+                alt="Voxify"
+                className="h-10 w-auto object-contain"
+              />
 
-              {/* License Status Badge in Header */}
+              {/* License Status Icon on the right of brand */}
               {licenseInfo.isActivated ? (
                 <button
                   onClick={() => setActiveTab('membership')}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-medium text-emerald-400 hover:bg-emerald-500/25 transition-colors cursor-pointer"
-                  title={`Licensed to ${licenseInfo.customerEmail || 'Verified Owner'}`}
+                  className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                  title={`PRO License Active (${licenseInfo.customerEmail || 'Verified Owner'})`}
                 >
-                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                  <span>PRO</span>
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                 </button>
               ) : (
                 <button
                   onClick={() => setActiveTab('membership')}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-[10px] font-medium text-amber-300 hover:bg-amber-500/25 transition-colors cursor-pointer animate-pulse"
-                  title="Click to view Voxify membership"
+                  className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 hover:bg-amber-500/25 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                  title="Activate Voxify PRO (Activation Required)"
                 >
-                  <Lock className="w-3 h-3 text-amber-400" />
-                  <span>Activate</span>
+                  <Rocket className="w-3.5 h-3.5 text-amber-400" />
                 </button>
               )}
             </div>
@@ -1361,6 +1397,19 @@ export function App() {
               >
                 <History className="w-4 h-4 shrink-0" />
                 <span>History</span>
+              </button>
+
+              {/* Docs / Tutorial Tab */}
+              <button
+                onClick={() => setActiveTab('docs')}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  activeTab === 'docs'
+                    ? 'bg-gradient-to-r from-[#1d4ed8] to-[#2563eb] text-white font-semibold shadow-md shadow-[#1d4ed8]/40 border border-[#3b82f6]/30'
+                    : 'text-slate-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <BookOpen className="w-4 h-4 shrink-0" />
+                <span>Docs</span>
               </button>
 
               {/* About Tab */}
@@ -1491,10 +1540,6 @@ export function App() {
                       <div className="px-2.5 py-1 bg-[#151517] border border-white/10 rounded-lg text-xs font-mono font-medium text-slate-200">
                         Win + Alt + S
                       </div>
-                      <span className="text-[10px] text-slate-500 font-medium">or</span>
-                      <div className="px-2.5 py-1 bg-[#151517] border border-white/10 rounded-lg text-xs font-mono font-medium text-slate-400">
-                        Ctrl + Alt + S
-                      </div>
                     </div>
                   </div>
 
@@ -1589,34 +1634,29 @@ export function App() {
                         <span className="text-sm font-medium text-slate-200">
                           Local Markdown Ingestion API
                         </span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950/40 text-emerald-400 font-mono border border-emerald-500/20">
-                          127.0.0.1:18200
-                        </span>
                         <InfoTooltip text="Allows any external app, CLI, Obsidian, or script to POST raw Markdown to http://127.0.0.1:18200/api/read and have it read aloud instantly in the Audio Pill." />
                       </div>
-                      <HandySwitch
-                        checked={apiServiceEnabled}
-                        onChange={handleToggleApiService}
-                      />
-                    </div>
-                    {apiServiceEnabled && (
-                      <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-3 text-xs">
-                        <div className="bg-[#151517] px-3 py-1.5 rounded-lg border border-white/5 font-mono text-[11px] text-slate-300 select-all overflow-x-auto flex-1">
-                          curl -X POST http://127.0.0.1:18200/api/read --data-binary @notes.md
-                        </div>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText('curl -X POST http://127.0.0.1:18200/api/read --data-binary @notes.md');
-                            setCopiedCurl(true);
-                            setTimeout(() => setCopiedCurl(false), 2000);
-                          }}
-                          className="px-2.5 py-1.5 rounded-lg bg-[#151517] hover:bg-[#2563eb]/20 text-slate-300 hover:text-white border border-white/5 hover:border-[#2563eb]/40 text-[11px] font-medium flex items-center gap-1.5 shrink-0 transition-colors"
-                        >
-                          {copiedCurl ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedCurl ? 'Copied' : 'Copy'}</span>
-                        </button>
+                      <div className="flex items-center gap-2.5">
+                        {apiServiceEnabled && (
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText('curl -X POST http://127.0.0.1:18200/api/read -H "Content-Type: text/plain; charset=utf-8" -d "# Hello\\nThis is raw markdown text."');
+                              setCopiedCurl(true);
+                              setTimeout(() => setCopiedCurl(false), 2000);
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-[#2563eb]/20 text-slate-300 hover:text-white border border-white/10 hover:border-[#2563eb]/40 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                            title="Copy cURL command with raw Markdown text payload"
+                          >
+                            {copiedCurl ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{copiedCurl ? 'Copied cURL' : 'Copy cURL'}</span>
+                          </button>
+                        )}
+                        <HandySwitch
+                          checked={apiServiceEnabled}
+                          onChange={handleToggleApiService}
+                        />
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1726,16 +1766,11 @@ export function App() {
                   <div className="flex items-center gap-3.5">
                     <img
                       src="/icon.png"
-                      alt="Voxify App Icon"
-                      className="w-12 h-12 rounded-2xl shadow-xl shadow-[#2563eb]/30 border border-white/20 shrink-0 object-cover"
+                      alt="Voxify Logo"
+                      className="w-12 h-12 object-contain drop-shadow-md"
                     />
                     <div>
-                      <div className="flex items-center gap-2.5">
-                        <h2 className="text-xl font-black text-white tracking-tight">Voxify</h2>
-                        <span className="px-2 py-0.5 rounded-md bg-[#2563eb]/20 text-[#93c5fd] font-mono text-[11px] font-semibold border border-[#2563eb]/40">
-                          v{CURRENT_APP_VERSION}
-                        </span>
-                      </div>
+                      <h2 className="text-2xl font-black text-white tracking-tight">Voxify</h2>
                       <p className="text-xs text-slate-400 font-medium mt-0.5">
                         Pure Desktop Alchemy • Sovereign Neural Speech
                       </p>
@@ -1870,6 +1905,156 @@ export function App() {
             </div>
           )}
 
+          {/* TAB 3: TUTORIAL / DOCS & HELP */}
+          {activeTab === 'docs' && (
+            <div className="max-w-2xl space-y-6 animate-in fade-in duration-200 pb-8 select-text">
+              {/* Docs Hero Banner */}
+              <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1e3a8a]/40 via-[#18181c] to-[#0f172a]/60 border border-blue-500/20 p-6 shadow-2xl space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#1d4ed8] via-[#2563eb] to-[#38bdf8] flex items-center justify-center text-white shadow-xl shadow-blue-500/30">
+                    <BookOpen className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-white tracking-tight">Voxify Documentation & Tutorial</h2>
+                    <p className="text-xs text-slate-400">
+                      Master instant neural speech, global hotkeys, and headless background workflows.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Start Guide */}
+              <div className="p-5 rounded-2xl bg-[#202024] border border-white/10 space-y-4 shadow-xl">
+                <div className="flex items-center gap-2 text-white font-bold text-sm">
+                  <Rocket className="w-4 h-4 text-blue-400" />
+                  <h3>Quick Start Guide</h3>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  <div className="flex gap-3 items-start p-3 rounded-xl bg-[#141417] border border-white/5">
+                    <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                      1
+                    </span>
+                    <div className="space-y-1">
+                      <p className="font-semibold text-slate-200">Highlight text anywhere</p>
+                      <p className="text-slate-400 leading-relaxed">
+                        Select text inside any desktop application — browser, PDF reader, code editor, Notion, Word, or Kindle app.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 items-start p-3 rounded-xl bg-[#141417] border border-white/5">
+                    <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                      2
+                    </span>
+                    <div className="space-y-1">
+                      <p className="font-semibold text-slate-200">Press the global read shortcut</p>
+                      <p className="text-slate-400 leading-relaxed">
+                        Press <kbd className="px-1.5 py-0.5 rounded bg-black/50 border border-white/10 font-mono text-[10px] text-blue-300">Win + Alt + S</kbd>. The lightweight Audio Pill floats into view right at your mouse cursor.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 items-start p-3 rounded-xl bg-[#141417] border border-white/5">
+                    <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                      3
+                    </span>
+                    <div className="space-y-1">
+                      <p className="font-semibold text-slate-200">Listen & Control</p>
+                      <p className="text-slate-400 leading-relaxed">
+                        Listen to lifelike local speech synthesis with zero cloud latency. Hover over the pill to pause, replay, or stop with <kbd className="px-1.5 py-0.5 rounded bg-black/50 border border-white/10 font-mono text-[10px] text-blue-300">Win + Alt + X</kbd>.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Keyboard Shortcuts Reference */}
+              <div className="p-5 rounded-2xl bg-[#202024] border border-white/10 space-y-4 shadow-xl">
+                <div className="flex items-center gap-2 text-white font-bold text-sm">
+                  <Command className="w-4 h-4 text-blue-400" />
+                  <h3>Global Keyboard Shortcuts</h3>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="p-3 rounded-xl bg-[#141417] border border-white/5 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-300 font-semibold">Read Selection</span>
+                      <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-blue-950/40 text-blue-300 border border-blue-500/20">
+                        Win + Alt + S
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">Captures selected text and initiates neural playback immediately.</p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-[#141417] border border-white/5 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-300 font-semibold">Stop Speech</span>
+                      <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-rose-950/40 text-rose-300 border border-rose-500/20">
+                        Win + Alt + X
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">Instantly kills ongoing audio playback and dismisses the audio pill.</p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-[#141417] border border-white/5 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-300 font-semibold">Replay Last History</span>
+                      <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-purple-950/40 text-purple-300 border border-purple-500/20">
+                        Win + Alt + H
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">Replays the most recent item from your speech history log.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Developer & CLI API Integration */}
+              <div className="p-5 rounded-2xl bg-[#202024] border border-white/10 space-y-4 shadow-xl">
+                <div className="flex items-center gap-2 text-white font-bold text-sm">
+                  <Terminal className="w-4 h-4 text-blue-400" />
+                  <h3>Local HTTP REST API (Developer & Scripting)</h3>
+                </div>
+
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Voxify exposes an ultra-fast local HTTP server on <code className="px-1.5 py-0.5 rounded bg-black/40 font-mono text-blue-400 text-[11px]">http://127.0.0.1:18200</code>. You can trigger speech from terminal scripts, Obsidian plugins, Python pipelines, or LLM agent turns.
+                </p>
+
+                <div className="space-y-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Example cURL Request</span>
+                  <pre className="p-3 rounded-xl bg-[#141417] border border-white/5 font-mono text-[11px] text-slate-200 overflow-x-auto select-all leading-normal">
+curl -X POST http://127.0.0.1:18200/api/read \
+  -H "Content-Type: text/plain; charset=utf-8" \
+  -d "Hello, this text is synthesized locally by Voxify."
+                  </pre>
+                </div>
+              </div>
+
+              {/* FAQ & Troubleshooting */}
+              <div className="p-5 rounded-2xl bg-[#202024] border border-white/10 space-y-4 shadow-xl">
+                <div className="flex items-center gap-2 text-white font-bold text-sm">
+                  <HelpCircle className="w-4 h-4 text-blue-400" />
+                  <h3>Frequently Asked Questions</h3>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  <div className="space-y-1">
+                    <h5 className="font-semibold text-slate-200">Does Voxify send my reading text to cloud servers?</h5>
+                    <p className="text-slate-400 leading-relaxed">
+                      Never. All neural synthesis runs 100% locally on your PC hardware via ONNX Runtime and the local Kokoro neural engine.
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <h5 className="font-semibold text-slate-200">What is the daily trigger quota?</h5>
+                    <p className="text-slate-400 leading-relaxed">
+                      The free version includes 5 daily reads with full neural quality. You can upgrade to a Sovereign Lifetime License in the Membership tab for unlimited reads forever.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* TAB 4: MEMBERSHIP & LIFETIME LICENSE */}
           {activeTab === 'membership' && (
             <div className="max-w-2xl space-y-5 animate-in fade-in duration-200 pb-8">
@@ -1899,7 +2084,7 @@ export function App() {
                         ? 'bg-rose-500/15 border border-rose-500/30 text-rose-300'
                         : 'bg-amber-500/15 border border-amber-500/30 text-amber-300'
                     }`}>
-                      <Lock className="w-3.5 h-3.5" />
+                      <Rocket className="w-3.5 h-3.5" />
                       <span>{dailyUsage.triggersUsed >= DAILY_TRIGGER_LIMIT ? 'Daily Limit Reached' : 'Free Tier'}</span>
                     </span>
                   )}
@@ -2073,11 +2258,6 @@ export function App() {
       {/* Bottom Status Bar */}
       <footer className="h-8 bg-[#121214] border-t border-white/5 px-4 flex items-center justify-between text-[11px] text-slate-500 select-none shrink-0">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#3b82f6] animate-pulse" />
-            <span className="text-slate-400 font-medium">Sarah (Neural Voice) • 1.0x Calibrated</span>
-          </div>
-
           {/* Quota / License Status Pill */}
           {licenseInfo.isActivated ? (
             <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-medium flex items-center gap-1 text-[10px]">
@@ -2294,6 +2474,83 @@ export function App() {
                 className="w-full py-2 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-medium transition-colors cursor-pointer text-center"
               >
                 I already have a license key
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Congratulations & Confetti Celebration Modal */}
+      {showCongratsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200 select-none">
+          <div className="relative w-full max-w-md p-7 rounded-3xl bg-gradient-to-b from-[#1b1f2e] via-[#161922] to-[#121215] border border-blue-500/40 shadow-2xl shadow-blue-500/20 text-center space-y-5 animate-in zoom-in-95 duration-200 overflow-hidden">
+            {/* Ambient celebration background orb */}
+            <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 w-48 h-48 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
+
+            {/* Floating Top Badge Icon */}
+            <div className="relative mx-auto w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#1d4ed8] via-[#2563eb] to-[#38bdf8] p-0.5 shadow-xl shadow-blue-500/30 flex items-center justify-center group animate-bounce">
+              <div className="w-full h-full bg-[#131722] rounded-[14px] flex items-center justify-center">
+                <PartyPopper className="w-8 h-8 text-blue-400 drop-shadow-[0_0_12px_rgba(59,130,246,0.6)]" />
+              </div>
+            </div>
+
+            {/* Header Text */}
+            <div className="relative space-y-1.5">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold tracking-wider uppercase">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>License Activated</span>
+              </span>
+              <h2 className="text-2xl font-black text-white tracking-tight pt-1">
+                Congratulations! 🎉
+              </h2>
+              <p className="text-xs text-slate-300 font-medium max-w-xs mx-auto leading-relaxed">
+                Welcome to <span className="text-white font-bold">Voxify Sovereign PRO</span>. All daily limits are permanently lifted!
+              </p>
+              {congratsDetails?.email && (
+                <p className="text-[11px] text-blue-400/90 font-mono">
+                  Activated for {congratsDetails.email}
+                </p>
+              )}
+            </div>
+
+            {/* Unlocked Features Capsule */}
+            <div className="relative p-3.5 rounded-2xl bg-[#141824]/90 border border-white/10 text-left space-y-2 text-xs">
+              <div className="flex items-center gap-2 text-slate-200 font-medium">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Unlimited lifetime neural speech synthesis</span>
+              </div>
+              <div className="flex items-center gap-2 text-slate-200 font-medium">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>100% offline & private local reading</span>
+              </div>
+              <div className="flex items-center gap-2 text-slate-200 font-medium">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Continuous lifetime model & app updates</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="relative pt-1 flex gap-2.5">
+              <button
+                onClick={() => {
+                  triggerConfettiCelebration();
+                }}
+                className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                title="Celebrate again!"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                <span>More Confetti</span>
+              </button>
+              <button
+                onClick={() => {
+                  setShowCongratsModal(false);
+                  setActiveTab('general');
+                }}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#1d4ed8] via-[#2563eb] to-[#3b82f6] hover:brightness-110 text-white font-bold text-xs shadow-lg shadow-blue-500/40 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <span>Start Reading Now</span>
+                <Rocket className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>

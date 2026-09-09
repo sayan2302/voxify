@@ -513,7 +513,7 @@ interface UpdateState {
   errorMessage?: string;
 }
 
-const CURRENT_APP_VERSION = '1.0.6';
+const CURRENT_APP_VERSION = '1.0.7';
 const REPO_OWNER = 'sayan2302';
 const DISTRIBUTION_REPO = 'voxify-app';
 const FALLBACK_REPO = 'voxify';
@@ -1297,13 +1297,20 @@ export function App() {
         {/* Left Sidebar (~200px) */}
         <aside className="w-52 bg-[#121214] border-r border-white/5 flex flex-col justify-between shrink-0 p-4">
           <div className="space-y-6">
-            {/* App Logo: Blue Bubbly Font */}
+            {/* App Logo: Brand Icon & Title */}
             <div className="pt-2 px-2 flex items-center justify-between">
-              <div className="relative">
-                <span className="text-2xl font-black tracking-tight text-[#3b82f6] font-sans drop-shadow-[0_2px_10px_rgba(37,99,235,0.55)]">
-                  voxify
-                </span>
-                <span className="absolute -bottom-1 right-0 w-1.5 h-1.5 rounded-full bg-[#2563eb] ring-2 ring-[#121214]" />
+              <div className="flex items-center gap-2.5">
+                <img
+                  src="/icon.png"
+                  alt="Voxify Logo"
+                  className="w-7 h-7 rounded-lg shadow-md shadow-black/40 ring-1 ring-white/10 object-cover"
+                />
+                <div className="relative">
+                  <span className="text-2xl font-black tracking-tight text-[#3b82f6] font-sans drop-shadow-[0_2px_10px_rgba(37,99,235,0.55)]">
+                    voxify
+                  </span>
+                  <span className="absolute -bottom-1 right-0 w-1.5 h-1.5 rounded-full bg-[#2563eb] ring-2 ring-[#121214]" />
+                </div>
               </div>
 
               {/* License Status Badge in Header */}
@@ -1717,9 +1724,11 @@ export function App() {
                 {/* Brand Header */}
                 <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3.5">
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#1d4ed8] via-[#2563eb] to-[#60a5fa] flex items-center justify-center text-white shadow-xl shadow-[#2563eb]/40 border border-white/20 shrink-0">
-                      <Sparkles className="w-6 h-6 animate-pulse" />
-                    </div>
+                    <img
+                      src="/icon.png"
+                      alt="Voxify App Icon"
+                      className="w-12 h-12 rounded-2xl shadow-xl shadow-[#2563eb]/30 border border-white/20 shrink-0 object-cover"
+                    />
                     <div>
                       <div className="flex items-center gap-2.5">
                         <h2 className="text-xl font-black text-white tracking-tight">Voxify</h2>
